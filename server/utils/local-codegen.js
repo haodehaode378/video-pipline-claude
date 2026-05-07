@@ -84,8 +84,32 @@ function keywordList(text) {
     .slice(0, 5)
 }
 
-export function generateLocalCodeBundle(episode, script) {
-  const parsedScenes = parseScriptTable(script)
+function parseMaybeJSON(value) {
+  if (!value) return null
+  if (typeof value === 'object') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function scenesFromTimeline(timeline) {
+  const parsed = parseMaybeJSON(timeline)
+  const scenes = parsed?.scenes
+  if (!Array.isArray(scenes) || scenes.length === 0) return []
+  return scenes.map((scene) => ({
+    start: Number(scene.start || 0),
+    end: Number(scene.end || Number(scene.start || 0) + Number(scene.duration || 0)),
+    duration: Number(scene.duration || 0),
+    visual: scene.visual || scene.title || '',
+    narration: scene.narration || scene.title || '',
+  })).filter((scene) => Number.isFinite(scene.start) && Number.isFinite(scene.duration) && scene.duration > 0)
+}
+
+export function generateLocalCodeBundle(episode, script, timeline = null) {
+  const timelineScenes = scenesFromTimeline(timeline)
+  const parsedScenes = timelineScenes.length ? timelineScenes : parseScriptTable(script)
   const fallbackScenes = parsedScenes.length ? parsedScenes : [{
     start: 0,
     end: Math.max(30, Number(episode.duration || 1) * 60),
@@ -93,7 +117,8 @@ export function generateLocalCodeBundle(episode, script) {
     visual: episode.title,
     narration: episode.title,
   }]
-  const totalDuration = Math.max(...fallbackScenes.map((scene) => scene.end))
+  const timelineData = parseMaybeJSON(timeline)
+  const totalDuration = Number(timelineData?.totalDuration) || Math.max(...fallbackScenes.map((scene) => scene.end))
   const title = episode.title || 'Micro Course'
 
   const sceneHtml = fallbackScenes.map((scene, index) => {
@@ -387,4 +412,3 @@ document.addEventListener('DOMContentLoaded', () => {
 
   return { html, css, js, source: 'local-fallback' }
 }
-

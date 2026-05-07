@@ -44,17 +44,6 @@ export default function CreateEpisode() {
     return res.json()
   }
 
-  const startResearch = async (slug) => {
-    const res = await fetch(`/api/episodes/${encodeURIComponent(slug)}/research`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    })
-    if (!res.ok) {
-      const data = await res.json()
-      throw new Error(data.error || '资料收集启动失败')
-    }
-  }
-
   const handleSingleSubmit = async (e) => {
     e.preventDefault()
     if (!topic.trim()) return
@@ -64,7 +53,6 @@ export default function CreateEpisode() {
 
     try {
       const episode = await createEpisode(topic.trim())
-      await startResearch(episode.slug)
       navigate(`/episode/${episode.slug}`)
     } catch (err) {
       setError(err.message)
@@ -92,7 +80,6 @@ export default function CreateEpisode() {
     for (let i = 0; i < titles.length; i++) {
       try {
         const episode = await createEpisode(titles[i])
-        await startResearch(episode.slug)
         ok++
         slugs.push(episode.slug)
       } catch {
@@ -165,7 +152,7 @@ export default function CreateEpisode() {
               disabled={loading}
               className="bg-tech-600 hover:bg-tech-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm transition-colors"
             >
-              {loading ? '创建并收集资料中...' : '开始收集资料'}
+              {loading ? '创建资料要求中...' : '创建并审核资料要求'}
             </button>
           </form>
         ) : (
@@ -201,7 +188,7 @@ export default function CreateEpisode() {
               disabled={loading}
               className="bg-tech-600 hover:bg-tech-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-lg text-sm transition-colors"
             >
-              {loading ? '批量收集资料中...' : '批量开始'}
+              {loading ? '批量创建资料要求中...' : '批量创建'}
             </button>
 
             {batchProgress && (

@@ -90,18 +90,28 @@ function validateCodeBundle(html, css, js) {
   return errors
 }
 
-async function generatePart(type, script, slug, template, research, retryNote = '') {
-  const { system, user } = buildCodePrompt(type, script, slug, template, research)
+function readJSONFile(filePath) {
+  const text = readText(filePath)
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch (err) {
+    return { __parseError: err.message }
+  }
+}
+
+async function generatePart(type, storyboard, slug, template, research, timeline, retryNote = '') {
+  const { system, user } = buildCodePrompt(type, storyboard, slug, template, research, timeline)
   const prompt = retryNote ? `${user}\n\nRegeneration requirements:\n${retryNote}` : user
   return sendMessage(system, prompt, { maxTokens: 12000 })
 }
 
-async function generateValidatedPart(type, script, slug, template, research) {
+async function generateValidatedPart(type, storyboard, slug, template, research, timeline) {
   let retryNote = ''
   let lastErrors = []
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const result = await generatePart(type, script, slug, template, research, retryNote)
+    const result = await generatePart(type, storyboard, slug, template, research, timeline, retryNote)
     if (result.error) return { error: result.error }
 
     const code = stripCodeFence(result.text, type)
@@ -122,8 +132,8 @@ async function generateValidatedPart(type, script, slug, template, research) {
   return { error: `Invalid ${type} after retries: ${lastErrors.join('; ')}` }
 }
 
-async function generateCSSWithStyleCheck(type, script, slug, template, research) {
-  let cssResult = await generateValidatedPart(type, script, slug, template, research)
+async function generateCSSWithStyleCheck(type, storyboard, slug, template, research, timeline) {
+  let cssResult = await generateValidatedPart(type, storyboard, slug, template, research, timeline)
   if (cssResult.error) return cssResult
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -132,7 +142,7 @@ async function generateCSSWithStyleCheck(type, script, slug, template, research)
 
     console.log(`[Step2] CSS style-check violations (attempt ${attempt + 1}):`, check.violations)
     if (attempt < 2) {
-      const retryPrompt = `Previous CSS violated these constraints: ${check.violations.join(', ')}.\nReturn complete plain CSS only, no markdown fences.\n\nResearch:\n${research}\n\nScript:\n${script}`
+      const retryPrompt = `Previous CSS violated these constraints: ${check.violations.join(', ')}.\nReturn complete plain CSS only, no markdown fences.\n\nResearch:\n${research}\n\nStoryboard:\n${storyboard}\n\nTimeline:\n${timeline}`
       const retry = await sendMessage(
         'You are a frontend expert. Regenerate valid CSS only.',
         retryPrompt,
@@ -156,9 +166,9 @@ function writeCodeBundle(dir, bundle) {
   writeText(`${dir}/script.js`, bundle.js)
 }
 
-function fallbackResult(episode, script, dir, reason) {
+function fallbackResult(episode, storyboard, timeline, dir, reason) {
   console.warn(`[Step2] AI code generation failed, using local fallback: ${reason}`)
-  const bundle = generateLocalCodeBundle(episode, script)
+  const bundle = generateLocalCodeBundle(episode, storyboard, timeline)
   const bundleErrors = validateCodeBundle(bundle.html, bundle.css, bundle.js)
   if (bundleErrors.length) {
     return { success: false, error: `Local fallback validation failed: ${bundleErrors.join('; ')}` }
@@ -180,28 +190,41 @@ function fallbackResult(episode, script, dir, reason) {
 export async function runStep2(episode) {
   console.log(`[Step2] Generating code for "${episode.title}"...`)
 
-  const scriptPath = `scripts/${episode.slug}/script.md`
-  const script = readText(scriptPath)
-  if (!script) {
-    return { success: false, error: 'Script not found. Run Step 1 first.' }
+  const storyboardPath = `scripts/${episode.slug}/storyboard.json`
+  const timelinePath = `${getEpisodeDir(episode.slug)}/timeline.json`
+  const storyboardData = readJSONFile(storyboardPath)
+  const timelineData = readJSONFile(timelinePath)
+  if (!storyboardData) {
+    return { success: false, error: 'storyboard.json not found. Run Step 1 first.' }
+  }
+  if (storyboardData.__parseError) {
+    return { success: false, error: `storyboard.json is invalid: ${storyboardData.__parseError}` }
+  }
+  if (!timelineData) {
+    return { success: false, error: 'timeline.json not found. Run timeline calibration first.' }
+  }
+  if (timelineData.__parseError) {
+    return { success: false, error: `timeline.json is invalid: ${timelineData.__parseError}` }
   }
 
   const research = readText(`scripts/${episode.slug}/research.md`) || ''
   const dir = getEpisodeDir(episode.slug)
   const slug = episode.slug
+  const storyboard = JSON.stringify(storyboardData, null, 2)
+  const timeline = JSON.stringify(timelineData, null, 2)
 
-  const htmlResult = await generateValidatedPart('html', script, slug, episode.template, research)
-  if (htmlResult.error) return fallbackResult(episode, script, dir, `HTML: ${htmlResult.error}`)
+  const htmlResult = await generateValidatedPart('html', storyboard, slug, episode.template, research, timeline)
+  if (htmlResult.error) return fallbackResult(episode, storyboard, timeline, dir, `HTML: ${htmlResult.error}`)
 
-  const cssResult = await generateCSSWithStyleCheck('css', script, slug, episode.template, research)
-  if (cssResult.error) return fallbackResult(episode, script, dir, `CSS: ${cssResult.error}`)
+  const cssResult = await generateCSSWithStyleCheck('css', storyboard, slug, episode.template, research, timeline)
+  if (cssResult.error) return fallbackResult(episode, storyboard, timeline, dir, `CSS: ${cssResult.error}`)
 
-  const jsResult = await generateValidatedPart('js', script, slug, episode.template, research)
-  if (jsResult.error) return fallbackResult(episode, script, dir, `JS: ${jsResult.error}`)
+  const jsResult = await generateValidatedPart('js', storyboard, slug, episode.template, research, timeline)
+  if (jsResult.error) return fallbackResult(episode, storyboard, timeline, dir, `JS: ${jsResult.error}`)
 
   const bundleErrors = validateCodeBundle(htmlResult.text, cssResult.text, jsResult.text)
   if (bundleErrors.length) {
-    return fallbackResult(episode, script, dir, `Code bundle validation failed: ${bundleErrors.join('; ')}`)
+    return fallbackResult(episode, storyboard, timeline, dir, `Code bundle validation failed: ${bundleErrors.join('; ')}`)
   }
 
   writeCodeBundle(dir, { html: htmlResult.text, css: cssResult.text, js: jsResult.text })

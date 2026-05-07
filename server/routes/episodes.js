@@ -22,10 +22,52 @@ function defaultSteps() {
   return Object.fromEntries(stepOrder.map((step) => [step, 'pending']))
 }
 
+function buildDefaultResearchBrief({ title, keywords, duration, sourceMaterial }) {
+  return `# 资料收集要求：${title}
+
+## 目标观众
+- 中文短视频观众，默认没有系统背景知识。
+
+## 视频目标
+- 用约 ${duration || 3} 分钟讲清楚「${title}」的核心概念、关键机制和一个可视化例子。
+
+## 资料收集问题
+1. 这个主题的准确定义是什么？
+2. 它解决什么问题，为什么重要？
+3. 核心机制或步骤是什么？
+4. 有哪些适合做成动画的例子、类比或过程图？
+5. 常见误解、边界条件或容易讲错的点是什么？
+
+## 必须收集
+- 权威定义或可靠背景说明。
+- 3-5 个关键事实。
+- 1 个适合短视频讲解的具体例子。
+- 2-4 个可视化/动画建议。
+- 不确定内容必须标注“待核实”，不能编造来源。
+
+## 避免
+- 不要泛泛而谈。
+- 不要堆砌百科式背景。
+- 不要使用无法验证的数据。
+- 不要把不确定信息写成确定结论。
+
+## 用户补充素材
+${sourceMaterial || '无'}
+
+## 关键词
+${keywords || '无'}
+`
+}
+
 function normalizeEpisode(episode) {
+  const steps = { ...defaultSteps(), ...(episode.steps || {}) }
+  if (!episode.steps?.timeline && episode.steps?.mux === 'completed') {
+    steps.timeline = 'completed'
+  }
   return {
     ...episode,
-    steps: { ...defaultSteps(), ...(episode.steps || {}) },
+    steps,
+    researchBrief: episode.researchBrief || buildDefaultResearchBrief(episode),
   }
 }
 
@@ -55,7 +97,8 @@ router.post('/', async (req, res) => {
     duration: duration || 3,
     template: template || '',
     sourceMaterial: sourceMaterial || '',
-    status: 'pending',
+    researchBrief: buildDefaultResearchBrief({ title, keywords, duration, sourceMaterial }),
+    status: 'brief_pending',
     steps: defaultSteps(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -72,6 +115,13 @@ router.post('/', async (req, res) => {
 router.post('/:slug/research', async (req, res) => {
   const { episodes, episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
+
+  if (req.body?.researchBrief !== undefined) {
+    episode.researchBrief = req.body.researchBrief
+  }
+  if (!episode.researchBrief?.trim()) {
+    return res.status(400).json({ error: 'researchBrief is required before research' })
+  }
 
   episode.status = 'running'
   episode.error = null
@@ -136,6 +186,19 @@ router.put('/:slug/script', (req, res) => {
   if (!episode) return res.status(404).json({ error: 'not found' })
 
   episode.scriptContent = req.body.content
+  episode.updatedAt = new Date().toISOString()
+  writeEpisodes(episodes)
+  res.json(episode)
+})
+
+router.put('/:slug/research-brief', (req, res) => {
+  const { episodes, episode } = findEpisode(req.params.slug)
+  if (!episode) return res.status(404).json({ error: 'not found' })
+  if (typeof req.body.content !== 'string' || !req.body.content.trim()) {
+    return res.status(400).json({ error: 'content is required' })
+  }
+
+  episode.researchBrief = req.body.content
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
   res.json(episode)

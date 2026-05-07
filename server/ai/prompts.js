@@ -22,22 +22,29 @@ function getEffectiveTemplate(episodeTemplate, globalTemplate) {
 export function buildResearchSearcherPrompt(episode, task = {}) {
   const name = task.name || 'Searcher'
   const focus = task.focus || 'general research material'
+  const researchBrief = episode.researchBrief || 'No user-confirmed research brief provided.'
   return {
     system: [
       `You are the ${name} agent in a micro-course generation pipeline.`,
       'Use the same AI API to collect background material for the topic.',
       `Your focus: ${focus}.`,
+      'Follow the user-confirmed Chinese research brief exactly.',
       'If your model/API has web-search capability, use it through the provider capability.',
       'If no live web access is available, say so explicitly and produce a knowledge-based research brief with uncertainty notes.',
       'Do not invent URLs. Only include URLs if you are confident they are real.',
+      'Return Chinese Markdown.',
     ].join(' '),
     user: `Topic: ${episode.title}
 Keywords: ${episode.keywords || 'none'}
 Target duration: about ${episode.duration || 3} minutes
+
+User-confirmed research brief:
+${researchBrief}
+
 User-provided material:
 ${episode.sourceMaterial || 'none'}
 
-Return Markdown with:
+Return Chinese Markdown with:
 - Search status
 - Key facts
 - Definitions
@@ -51,21 +58,26 @@ Return Markdown with:
 }
 
 export function buildResearchAnalystPrompt(episode, searchMaterial) {
+  const researchBrief = episode.researchBrief || 'No user-confirmed research brief provided.'
   return {
     system: [
       'You are the Analyst agent.',
       'Turn collected material into a factual research.md for a short educational video.',
       'Be concrete, concise, and useful for script and HTML animation generation.',
       'Do not fabricate facts or sources.',
+      'Output Chinese Markdown.',
     ].join(' '),
     user: `Topic: ${episode.title}
 Keywords: ${episode.keywords || 'none'}
 Target duration: about ${episode.duration || 3} minutes
 
+User-confirmed research brief:
+${researchBrief}
+
 Collected material:
 ${searchMaterial}
 
-Output only Markdown with these sections:
+Output only Chinese Markdown with these sections:
 # Research: ${episode.title}
 ## Core conclusions
 ## Concept definition
@@ -78,6 +90,7 @@ Output only Markdown with these sections:
 ## Unverified points
 
 Rules:
+- Follow the user-confirmed research brief.
 - Mark uncertain information as "Needs verification".
 - Visual suggestions must be specific enough for HTML/CSS/JS generation.
 - Keep it suitable for a micro-course video.`,
@@ -85,13 +98,17 @@ Rules:
 }
 
 export function buildResearchVerifierPrompt(episode, draftResearch, searchMaterial) {
+  const researchBrief = episode.researchBrief || 'No user-confirmed research brief provided.'
   return {
     system: [
       'You are the Verifier agent.',
       'Review the draft research for completeness, accuracy, and usefulness.',
-      'Output the final research.md only.',
+      'Output the final Chinese research.md only.',
     ].join(' '),
     user: `Topic: ${episode.title}
+
+User-confirmed research brief:
+${researchBrief}
 
 Draft research:
 ${draftResearch}
@@ -100,6 +117,7 @@ Original collected material:
 ${searchMaterial}
 
 Revise and output final Markdown. Requirements:
+- Follow the user-confirmed research brief.
 - Keep clear headings.
 - Fill missing definition, mechanism, example, misconception, and visual suggestions.
 - Remove unreliable claims without support.
@@ -119,8 +137,8 @@ export function buildScriptPrompt(topic, keywords, duration, sourceMaterial, res
   return {
     system: [
       'You are a micro-course video script writer.',
-      'Generate an accurate, concise, animation-friendly script.',
-      'Only output a three-column Markdown table.',
+      'Generate an accurate, concise, animation-friendly storyboard.',
+      'Only output valid JSON. Do not use markdown fences.',
     ].join(' '),
     user: `Topic:
 ${topic}
@@ -138,20 +156,31 @@ User-provided material:
 ${sourceMaterial || 'none'}
 
 Output format:
-| Time | Visual | Narration |
+{
+  "version": 1,
+  "scenes": [
+    {
+      "id": "scene-01",
+      "title": "short Chinese title",
+      "visual": "specific layout and animation description",
+      "narration": "natural spoken Chinese narration, 1-3 sentences",
+      "intent": "what this scene teaches",
+      "minDuration": 3,
+      "maxDuration": 8,
+      "animationHint": "intro/hold/outro animation guidance"
+    }
+  ]
+}
 
 Rules:
-- Time ranges must look like 0:00-0:10.
-- Visual descriptions must include layout, color, elements, animation, code blocks, and pacing.
-- Narration must be natural spoken Chinese, 1-3 sentences per segment.
+- Return 5-8 scenes for the whole video.
+- Visual descriptions must include layout, color, elements, animation, code blocks when relevant, and pacing.
+- Narration must be natural spoken Chinese, 1-3 short sentences per scene.
+- minDuration and maxDuration are initial pacing hints only; final timing will be based on real TTS audio duration.
+- maxDuration must be greater than or equal to minDuration.
 - Facts must come from Research or user material. Do not fabricate facts.
-
-Fixed structure:
-- 0:00-0:10 title and hook
-- 0:10-0:40 concept explanation
-- 0:40-1:30 animated demonstration
-- 1:30-1:50 code or key-step explanation
-- 1:50-end one-sentence summary
+- Use Chinese for title, visual, narration, intent, and animationHint.
+- Use this story arc: title hook, concept explanation, mechanism/demo, key-step explanation, summary.
 
 Base style constraints:
 - Dark background theme, around ${bg}.
@@ -162,7 +191,7 @@ Base style constraints:
   }
 }
 
-export function buildCodePrompt(type, script, slug, episodeTemplate = '', research = '') {
+export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', research = '', timeline = '') {
   const style = loadStyleConfig()
   const { colors = {}, fonts = {}, animation = 'minimal', template } = style
   const bg = colors.background || '#1a1a2e'
@@ -178,7 +207,9 @@ export function buildCodePrompt(type, script, slug, episodeTemplate = '', resear
 Requirements:
 - Do not use markdown fences.
 - Root element: <div id="root" data-duration="total seconds">.
+- The root data-duration must exactly match Timeline.totalDuration.
 - Put all visible scenes directly in HTML as real <section class="scene" data-start="start seconds" data-duration="duration seconds"> elements inside #root.
+- Every scene data-start and data-duration must exactly match the matching Timeline scene.
 - Every scene must have both data-start and data-duration. Scene durations must cover the whole root duration without the first scene swallowing later scenes.
 - Do not rely on JavaScript to create the primary scene DOM.
 - Do not include inline <style>. All styling must live in style.css.
@@ -206,6 +237,7 @@ Requirements:
 - At any seek time, exactly one matching scene should be visible.
 - Expose window.__hfSeek(seconds) for Puppeteer rendering.
 - Include narration data: const narrations = [{ start, end, text }].
+- Narration start/end values must come from Timeline scenes.
 - Do not autoplay audio. Do not break screenshots.`,
   }
 
@@ -214,8 +246,11 @@ Requirements:
     user: `Research:
 ${research || 'none'}
 
-Script:
-${script}
+Storyboard JSON:
+${storyboard}
+
+Final audio-calibrated Timeline JSON:
+${timeline || 'none'}
 
 Episode slug:
 ${slug}

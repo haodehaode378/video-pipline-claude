@@ -70,7 +70,7 @@ describe('slugify', () => {
 })
 
 // Replicate normalize logic from routes
-const stepOrder = ['research', 'script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
+const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
 
 function defaultSteps() {
   return Object.fromEntries(stepOrder.map((step) => [step, 'pending']))
@@ -88,6 +88,7 @@ describe('normalizeEpisode', () => {
     const ep = normalizeEpisode({ slug: 'test', title: 'Test', steps: {} })
     expect(ep.steps.research).toBe('pending')
     expect(ep.steps.script).toBe('pending')
+    expect(ep.steps.timeline).toBe('pending')
     expect(ep.steps.code).toBe('pending')
     expect(ep.steps.mux).toBe('pending')
   })
@@ -108,7 +109,7 @@ describe('normalizeEpisode', () => {
 
 describe('stepOrder', () => {
   it('has 8 steps', () => {
-    expect(stepOrder).toHaveLength(8)
+    expect(stepOrder).toHaveLength(9)
   })
 
   it('starts with research and ends with mux', () => {
@@ -119,11 +120,12 @@ describe('stepOrder', () => {
   it('contains all expected steps', () => {
     expect(stepOrder).toContain('research')
     expect(stepOrder).toContain('script')
+    expect(stepOrder).toContain('narration')
+    expect(stepOrder).toContain('tts')
+    expect(stepOrder).toContain('timeline')
     expect(stepOrder).toContain('code')
     expect(stepOrder).toContain('snapshot')
     expect(stepOrder).toContain('render')
-    expect(stepOrder).toContain('narration')
-    expect(stepOrder).toContain('tts')
     expect(stepOrder).toContain('mux')
   })
 })

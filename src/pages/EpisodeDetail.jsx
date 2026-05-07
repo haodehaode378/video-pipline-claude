@@ -7,15 +7,16 @@ import ScriptEditor from '../components/ScriptEditor'
 import CodePreview from '../components/CodePreview'
 import { usePipelineStatus } from '../hooks/usePipelineStatus'
 
-const stepOrder = ['research', 'script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
+const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
 const stepNames = {
   research: '资料收集',
   script: 'AI 脚本生成',
+  narration: '旁白分段提取',
+  tts: 'TTS 语音合成',
+  timeline: '音频时间轴校准',
   code: 'HTML/CSS/JS 代码生成',
   snapshot: '场景截图',
   render: '视频渲染',
-  narration: '旁白分段提取',
-  tts: 'TTS 语音合成',
   mux: '最终合成',
 }
 
@@ -50,7 +51,10 @@ export default function EpisodeDetail() {
   const { slug } = useParams()
   const [episode, setEpisode] = useState(null)
   const [error, setError] = useState('')
+  const [researchBrief, setResearchBrief] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
   const generateStartedRef = useRef(false)
+  const briefLoadedRef = useRef('')
 
   const { episode: wsEpisode, connected } = usePipelineStatus(slug)
 
@@ -85,6 +89,32 @@ export default function EpisodeDetail() {
     }
   }, [fetchEpisode, slug])
 
+  const startResearch = useCallback(async () => {
+    if (!researchBrief.trim()) {
+      setError('请先填写资料收集要求')
+      return
+    }
+
+    setActionLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/episodes/${encodeURIComponent(slug)}/research`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ researchBrief }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '资料收集启动失败')
+      }
+      fetchEpisode()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchEpisode, researchBrief, slug])
+
   useEffect(() => {
     const timer = setTimeout(fetchEpisode, 0)
     return () => clearTimeout(timer)
@@ -93,17 +123,18 @@ export default function EpisodeDetail() {
   const displayEpisode = wsEpisode || episode
 
   useEffect(() => {
+    if (!displayEpisode) return
+    if (briefLoadedRef.current === displayEpisode.slug) return
+    setResearchBrief(displayEpisode.researchBrief || '')
+    briefLoadedRef.current = displayEpisode.slug
+  }, [displayEpisode])
+
+  useEffect(() => {
     if (!displayEpisode || displayEpisode.status !== 'running') return
     const interval = connected ? 10000 : 3000
     const timer = setInterval(fetchEpisode, interval)
     return () => clearInterval(timer)
   }, [displayEpisode, connected, fetchEpisode])
-
-  useEffect(() => {
-    if (displayEpisode?.status !== 'research_completed') return
-    const timer = setTimeout(startGenerate, 0)
-    return () => clearTimeout(timer)
-  }, [displayEpisode?.status, startGenerate])
 
   if (error && !displayEpisode) {
     return (
@@ -133,8 +164,10 @@ export default function EpisodeDetail() {
       : displayEpisode.status === 'failed'
         ? '失败'
         : displayEpisode.status === 'research_completed'
-          ? '资料已完成，正在启动生成'
-          : '进行中'
+          ? '资料已完成，等待确认生成'
+          : displayEpisode.status === 'brief_pending'
+            ? '等待审核资料收集要求'
+            : '进行中'
 
   return (
     <div>
@@ -155,6 +188,44 @@ export default function EpisodeDetail() {
               {displayEpisode.status === 'running' ? ' - 执行中' : displayEpisode.status === 'completed' ? ' - 全部完成' : ''}
             </p>
           </section>
+
+          {displayEpisode.steps?.research !== 'completed' && displayEpisode.status !== 'running' && (
+            <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h2 className="text-sm font-medium text-gray-400">资料收集要求</h2>
+                <button
+                  onClick={startResearch}
+                  disabled={actionLoading || !researchBrief.trim()}
+                  className="bg-tech-600 hover:bg-tech-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  {actionLoading ? '启动中...' : '确认并开始资料收集'}
+                </button>
+              </div>
+              <textarea
+                value={researchBrief}
+                onChange={(e) => setResearchBrief(e.target.value)}
+                rows={16}
+                className="w-full bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-sm text-gray-300 focus:outline-none focus:border-tech-500 transition-colors resize-y"
+              />
+            </section>
+          )}
+
+          {displayEpisode.status === 'research_completed' && (
+            <section className="bg-gray-900 border border-gray-800 rounded-xl p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-medium text-gray-400 mb-1">资料已完成</h2>
+                  <p className="text-sm text-gray-500">确认下方资料没有偏题后，再进入脚本和分镜生成。</p>
+                </div>
+                <button
+                  onClick={startGenerate}
+                  className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  开始生成脚本和视频
+                </button>
+              </div>
+            </section>
+          )}
 
           {error && (
             <section className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
@@ -240,7 +311,30 @@ export default function EpisodeDetail() {
         </section>
       )}
 
-      {displayEpisode.steps?.script === 'completed' && (
+      {displayEpisode.storyboardContent && (
+        <section className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-medium text-gray-400 mb-3">分镜 JSON</h2>
+          <pre className="whitespace-pre-wrap text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-4 max-h-96 overflow-auto">
+            {JSON.stringify(displayEpisode.storyboardContent, null, 2)}
+          </pre>
+        </section>
+      )}
+
+      {displayEpisode.timelineContent && (
+        <section className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-5">
+          <h2 className="text-sm font-medium text-gray-400 mb-3">音频校准时间轴</h2>
+          {displayEpisode.timelineWarnings?.length > 0 && (
+            <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-200">
+              {displayEpisode.timelineWarnings.join('；')}
+            </div>
+          )}
+          <pre className="whitespace-pre-wrap text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-4 max-h-96 overflow-auto">
+            {JSON.stringify(displayEpisode.timelineContent, null, 2)}
+          </pre>
+        </section>
+      )}
+
+      {displayEpisode.steps?.script === 'completed' && !displayEpisode.storyboardContent && (
         <div className="mt-6">
           <ScriptEditor
             content={displayEpisode.scriptContent}

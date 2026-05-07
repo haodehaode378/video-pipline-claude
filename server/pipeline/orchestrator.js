@@ -7,6 +7,7 @@ import { runStep3 } from './step3-snapshot.js'
 import { runStep4 } from './step4-render.js'
 import { runStep5 } from './step5-narration.js'
 import { runStep6 } from './step6-tts.js'
+import { runTimelineStep } from './step-timeline.js'
 import { runStep7 } from './step7-mux.js'
 
 let broadcast = null
@@ -14,7 +15,7 @@ export function setBroadcaster(fn) { broadcast = fn }
 
 const DATA_PATH = 'data/episodes.json'
 
-const stepOrder = ['research', 'script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
+const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
 
 function updateEpisode(slug, updater) {
   const episodes = readJSON(DATA_PATH) || []
@@ -99,6 +100,59 @@ export async function startPipeline(episode, startFrom, options = {}) {
     updateEpisode(slug, (ep) => {
       ep.steps.script = 'completed'
       ep.scriptContent = r.content
+      if (r.storyboardContent) ep.storyboardContent = r.storyboardContent
+    })
+  }
+
+  if (shouldRun('narration', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.narration = 'running' })
+    const r = await runStep5(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.narration = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.narration = 'completed'
+      if (r.segments) ep.narrationSegments = r.segments
+    })
+  }
+
+  if (shouldRun('tts', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.tts = 'running' })
+    const r = await runStep6(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.tts = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.tts = 'completed'
+      if (r.segments) ep.ttsSegments = r.segments
+    })
+  }
+
+  if (shouldRun('timeline', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.timeline = 'running' })
+    const r = await runTimelineStep(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.timeline = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.timeline = 'completed'
+      ep.timelineContent = r.timeline
+      ep.timelineWarnings = r.warnings || []
     })
   }
 
@@ -144,34 +198,6 @@ export async function startPipeline(episode, startFrom, options = {}) {
       })
       return
     }
-  }
-
-  if (shouldRun('narration', startIdx, stopIdx)) {
-    updateEpisode(slug, (ep) => { ep.steps.narration = 'running' })
-    const r = await runStep5(episode)
-    if (!r.success) {
-      updateEpisode(slug, (ep) => {
-        ep.steps.narration = 'failed'
-        ep.status = 'failed'
-        ep.error = r.error
-      })
-      return
-    }
-    updateEpisode(slug, (ep) => { ep.steps.narration = 'completed' })
-  }
-
-  if (shouldRun('tts', startIdx, stopIdx)) {
-    updateEpisode(slug, (ep) => { ep.steps.tts = 'running' })
-    const r = await runStep6(episode)
-    if (!r.success) {
-      updateEpisode(slug, (ep) => {
-        ep.steps.tts = 'failed'
-        ep.status = 'failed'
-        ep.error = r.error
-      })
-      return
-    }
-    updateEpisode(slug, (ep) => { ep.steps.tts = 'completed' })
   }
 
   if (shouldRun('mux', startIdx, stopIdx)) {

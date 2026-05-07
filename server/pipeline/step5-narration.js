@@ -1,35 +1,11 @@
 import path from 'node:path'
 import { getEpisodeDir, getScriptDir, readText, writeText } from '../utils/file-helper.js'
 
-function timeToSeconds(t) {
-  const parts = t.trim().split(':')
-  return parseInt(parts[0]) * 60 + parseInt(parts[1])
-}
-
-function parseScriptTable(markdown) {
-  const lines = markdown.split('\n')
-  const segments = []
-
-  for (const line of lines) {
-    const match = line.match(/^\|\s*([\d:]+-[\d:]+)\s*\|\s*(.+?)\s*\|\s*(.+?)\s*\|/)
-    if (!match) continue
-
-    const timeRange = match[1]
-    const visual = match[2].trim()
-    const narration = match[3].trim()
-
-    if (timeRange.includes('时间') || timeRange.includes('----')) continue
-
-    const [startStr, endStr] = timeRange.split('-')
-    segments.push({
-      start: timeToSeconds(startStr),
-      end: timeToSeconds(endStr),
-      visual,
-      narration,
-    })
-  }
-
-  return segments
+function readStoryboard(scriptDir) {
+  const text = readText(path.join(scriptDir, 'storyboard.json'))
+  if (!text) return null
+  const parsed = JSON.parse(text)
+  return Array.isArray(parsed) ? parsed : parsed.scenes
 }
 
 export async function runStep5(episode) {
@@ -37,37 +13,40 @@ export async function runStep5(episode) {
 
   try {
     const scriptDir = getScriptDir(episode.slug)
-    const scriptPath = path.join(scriptDir, 'script.md')
-    const scriptText = readText(scriptPath)
+    const storyboard = readStoryboard(scriptDir)
 
-    if (!scriptText) {
-      return { success: false, error: 'script.md not found. Run Step 1 first.' }
+    if (!Array.isArray(storyboard) || storyboard.length === 0) {
+      return { success: false, error: 'storyboard.json not found or empty. Run Step 1 first.' }
     }
-
-    const segments = parseScriptTable(scriptText)
-
-    if (segments.length === 0) {
-      return { success: false, error: 'No narration segments found in script.md' }
-    }
-
-    console.log(`[Step5] Found ${segments.length} narration segments`)
 
     const episodeDir = getEpisodeDir(episode.slug)
     const narrationDir = path.join(episodeDir, 'narration')
+    const segments = storyboard.map((scene, index) => {
+      const id = scene.id || `scene-${String(index + 1).padStart(2, '0')}`
+      const textFile = `seg_${String(index).padStart(3, '0')}.txt`
+      const narration = String(scene.narration || '').trim()
+      writeText(path.join(narrationDir, textFile), narration)
 
-    for (let i = 0; i < segments.length; i++) {
-      const seg = segments[i]
-      const filename = `seg_${String(i).padStart(3, '0')}.txt`
-      const filePath = path.join(narrationDir, filename)
-      writeText(filePath, seg.narration)
-      seg.textFile = filename
-      seg.id = i
+      return {
+        index,
+        id,
+        title: scene.title || '',
+        visual: scene.visual || '',
+        narration,
+        intent: scene.intent || '',
+        minDuration: Number(scene.minDuration || 3),
+        maxDuration: Number(scene.maxDuration || 8),
+        animationHint: scene.animationHint || '',
+        textFile,
+      }
+    })
+
+    const empty = segments.find((segment) => !segment.narration)
+    if (empty) {
+      return { success: false, error: `Empty narration for segment ${empty.id}` }
     }
 
-    const csvHeader = 'id,start,end,text_file'
-    const csvRows = segments.map((s) => `${s.id},${s.start},${s.end},${s.textFile}`)
-    const csvContent = [csvHeader, ...csvRows].join('\n')
-    writeText(path.join(narrationDir, 'segments.csv'), csvContent)
+    writeText(path.join(narrationDir, 'segments.json'), JSON.stringify(segments, null, 2))
 
     console.log(`[Step5] Narration written to ${narrationDir}`)
     return { success: true, segments }

@@ -86,23 +86,23 @@ describe('buildScriptPrompt', () => {
     expect(result.user).toContain('extreme')
   })
 
-  it('system prompt describes script writer role', async () => {
+  it('system prompt describes storyboard writer role', async () => {
     writeStyleConfig({ colors: {}, fonts: {}, animation: 'minimal' })
     const { buildScriptPrompt } = await import('./prompts.js')
     const result = buildScriptPrompt('Topic', '', 3, '')
     expect(result.system).toContain('micro-course video script writer')
-    expect(result.system).toContain('three-column')
+    expect(result.system).toContain('valid JSON')
   })
 
-  it('user prompt specifies fixed structure sections', async () => {
+  it('user prompt specifies storyboard JSON fields', async () => {
     writeStyleConfig({ colors: {}, fonts: {}, animation: 'minimal' })
     const { buildScriptPrompt } = await import('./prompts.js')
     const result = buildScriptPrompt('Topic', '', 3, '')
-    expect(result.user).toContain('0:00-0:10')
-    expect(result.user).toContain('0:10-0:40')
-    expect(result.user).toContain('0:40-1:30')
+    expect(result.user).toContain('"scenes"')
+    expect(result.user).toContain('"narration"')
+    expect(result.user).toContain('"minDuration"')
     expect(result.user).toContain('concept explanation')
-    expect(result.user).toContain('title and hook')
+    expect(result.user).toContain('title hook')
   })
 })
 
