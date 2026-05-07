@@ -1,0 +1,129 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+
+// The routes module has side effects (imports orchestrator, reads env).
+// We test the internal helper functions by extracting them or testing through HTTP.
+// Since Express 5 Router can be tested via supertest-style calls, but we don't
+// want to install supertest. Instead we test the pure logic functions.
+
+const DATA_PATH = 'data/episodes.json'
+const TEST_DATA_PATH = 'data/episodes-test-backup.json'
+
+function backupData() {
+  if (fs.existsSync(DATA_PATH)) {
+    fs.copyFileSync(DATA_PATH, TEST_DATA_PATH)
+  }
+}
+
+function restoreData() {
+  if (fs.existsSync(TEST_DATA_PATH)) {
+    fs.copyFileSync(TEST_DATA_PATH, DATA_PATH)
+    fs.unlinkSync(TEST_DATA_PATH)
+  } else {
+    try { fs.unlinkSync(DATA_PATH) } catch {}
+  }
+}
+
+// Replicate slugify logic from routes/episodes.js
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 60)
+}
+
+describe('slugify', () => {
+  it('converts English text to slug', () => {
+    expect(slugify('Hello World')).toBe('hello-world')
+  })
+
+  it('preserves Chinese characters', () => {
+    expect(slugify('栈的数据结构')).toBe('栈的数据结构')
+  })
+
+  it('handles mixed Chinese and English', () => {
+    expect(slugify('栈 Stack 应用')).toBe('栈-stack-应用')
+  })
+
+  it('removes special characters', () => {
+    expect(slugify('Hello!!! World???')).toBe('hello-world')
+  })
+
+  it('trims leading and trailing dashes', () => {
+    expect(slugify('--Hello World--')).toBe('hello-world')
+  })
+
+  it('limits to 60 characters', () => {
+    const long = slugify('a'.repeat(100))
+    expect(long.length).toBeLessThanOrEqual(60)
+  })
+
+  it('handles empty string', () => {
+    expect(slugify('')).toBe('')
+  })
+
+  it('collapses multiple separators', () => {
+    expect(slugify('a   b---c')).toBe('a-b-c')
+  })
+})
+
+// Replicate normalize logic from routes
+const stepOrder = ['research', 'script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
+
+function defaultSteps() {
+  return Object.fromEntries(stepOrder.map((step) => [step, 'pending']))
+}
+
+function normalizeEpisode(episode) {
+  return {
+    ...episode,
+    steps: { ...defaultSteps(), ...(episode.steps || {}) },
+  }
+}
+
+describe('normalizeEpisode', () => {
+  it('fills in missing step states', () => {
+    const ep = normalizeEpisode({ slug: 'test', title: 'Test', steps: {} })
+    expect(ep.steps.research).toBe('pending')
+    expect(ep.steps.script).toBe('pending')
+    expect(ep.steps.code).toBe('pending')
+    expect(ep.steps.mux).toBe('pending')
+  })
+
+  it('preserves existing step states', () => {
+    const ep = normalizeEpisode({ slug: 'test', title: 'Test', steps: { research: 'completed', script: 'running' } })
+    expect(ep.steps.research).toBe('completed')
+    expect(ep.steps.script).toBe('running')
+    expect(ep.steps.code).toBe('pending')
+  })
+
+  it('handles null/undefined steps', () => {
+    const ep = normalizeEpisode({ slug: 'test', title: 'Test' })
+    expect(ep.steps).toBeDefined()
+    expect(ep.steps.research).toBe('pending')
+  })
+})
+
+describe('stepOrder', () => {
+  it('has 8 steps', () => {
+    expect(stepOrder).toHaveLength(8)
+  })
+
+  it('starts with research and ends with mux', () => {
+    expect(stepOrder[0]).toBe('research')
+    expect(stepOrder[stepOrder.length - 1]).toBe('mux')
+  })
+
+  it('contains all expected steps', () => {
+    expect(stepOrder).toContain('research')
+    expect(stepOrder).toContain('script')
+    expect(stepOrder).toContain('code')
+    expect(stepOrder).toContain('snapshot')
+    expect(stepOrder).toContain('render')
+    expect(stepOrder).toContain('narration')
+    expect(stepOrder).toContain('tts')
+    expect(stepOrder).toContain('mux')
+  })
+})

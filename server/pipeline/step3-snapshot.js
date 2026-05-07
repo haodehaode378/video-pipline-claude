@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer'
 import path from 'node:path'
 import fs from 'node:fs'
 import { getEpisodeDir } from '../utils/file-helper.js'
+import { inspectRenderQuality } from '../utils/render-quality.js'
 
 export async function runStep3(episode) {
   console.log(`[Step3] Taking snapshots for "${episode.title}"...`)
@@ -39,6 +40,11 @@ export async function runStep3(episode) {
 
     if (scenes.length === 0) {
       return { success: false, error: 'No .scene[data-start] elements found. Generated HTML is not renderable.' }
+    }
+
+    const quality = await inspectRenderQuality(page, scenes)
+    if (!quality.passed) {
+      return { success: false, error: `Snapshot quality check failed: ${quality.errors.join('; ')}` }
     }
 
     for (let i = 0; i < scenes.length; i++) {

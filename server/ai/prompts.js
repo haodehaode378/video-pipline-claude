@@ -178,8 +178,11 @@ export function buildCodePrompt(type, script, slug, episodeTemplate = '', resear
 Requirements:
 - Do not use markdown fences.
 - Root element: <div id="root" data-duration="total seconds">.
-- Put all visible scenes directly in HTML as real <section class="scene" data-start="start seconds"> elements inside #root.
+- Put all visible scenes directly in HTML as real <section class="scene" data-start="start seconds" data-duration="duration seconds"> elements inside #root.
+- Every scene must have both data-start and data-duration. Scene durations must cover the whole root duration without the first scene swallowing later scenes.
 - Do not rely on JavaScript to create the primary scene DOM.
+- Do not include inline <style>. All styling must live in style.css.
+- Do not use Tailwind, Bootstrap, or utility framework class names. Use semantic classes that style.css defines.
 - Include title text, explanatory text, geometric visuals, and code blocks.
 - Link same-directory style.css and script.js.
 - Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
@@ -191,13 +194,16 @@ Requirements:
 - Background ${bg}, card ${card}, accent ${accent}.
 - Body font: ${bodyFont}. Code font: ${codeFont}.
 - Use CSS @keyframes. Animation intensity: ${animation}.
-- Do not output Tailwind class names. Use plain CSS.`,
+- Define all classes used by the HTML.
+- Do not output Tailwind class names or assume any CSS framework. Use plain CSS.`,
 
     js: `Generate complete JavaScript. Output JS code only.
 Requirements:
 - Do not use markdown fences.
 - Do not create the primary scene DOM. The HTML file already contains all .scene[data-start] elements.
+- Do not use innerHTML, insertAdjacentHTML, document.createElement, or appendChild for primary scene content.
 - Control scene switching by data-duration and data-start.
+- At any seek time, exactly one matching scene should be visible.
 - Expose window.__hfSeek(seconds) for Puppeteer rendering.
 - Include narration data: const narrations = [{ start, end, text }].
 - Do not autoplay audio. Do not break screenshots.`,

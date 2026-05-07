@@ -3,6 +3,10 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { getEpisodeDir } from '../utils/file-helper.js'
 import { imagesToVideo } from '../media/ffmpeg.js'
+import { inspectRenderQuality } from '../utils/render-quality.js'
+
+const MIN_EFFECTIVE_FPS = parseFloat(process.env.RENDER_MIN_EFFECTIVE_FPS || '8')
+const MAX_RENDER_FRAMES = parseInt(process.env.RENDER_MAX_FRAMES || '1200', 10)
 
 export async function runStep4(episode, fps = 30) {
   console.log(`[Step4] Rendering video for "${episode.title}"...`)
@@ -38,12 +42,19 @@ export async function runStep4(episode, fps = 30) {
     const renderState = await page.evaluate(() => ({
       hasRoot: Boolean(document.getElementById('root')),
       hasSeek: typeof window.__hfSeek === 'function',
-      sceneCount: document.querySelectorAll('.scene[data-start]').length,
+      scenes: Array.from(document.querySelectorAll('.scene[data-start]')).map((el) => ({
+        start: parseFloat(el.dataset.start),
+      })).filter((scene) => Number.isFinite(scene.start)),
     }))
     if (!renderState.hasRoot) return { success: false, error: 'Missing #root element' }
     if (!renderState.hasSeek) return { success: false, error: 'Missing window.__hfSeek(seconds)' }
-    if (renderState.sceneCount === 0) {
+    if (renderState.scenes.length === 0) {
       return { success: false, error: 'No .scene[data-start] elements found. Refusing to render black video.' }
+    }
+
+    const quality = await inspectRenderQuality(page, renderState.scenes)
+    if (!quality.passed) {
+      return { success: false, error: `Render quality check failed: ${quality.errors.join('; ')}` }
     }
 
     const totalDuration = await page.evaluate(() => {
@@ -54,7 +65,8 @@ export async function runStep4(episode, fps = 30) {
     const totalFrames = Math.ceil(totalDuration * fps)
     console.log(`[Step4] Duration: ${totalDuration}s, Frames: ${totalFrames} @ ${fps}fps`)
 
-    const maxFrames = Math.min(totalFrames, 90)
+    const minFrames = Math.ceil(totalDuration * MIN_EFFECTIVE_FPS)
+    const maxFrames = Math.min(totalFrames, Math.max(minFrames, Math.min(MAX_RENDER_FRAMES, totalFrames)))
     const step = Math.max(1, Math.floor(totalFrames / maxFrames))
     const actualFrames = Math.ceil(totalFrames / step)
     const actualFps = actualFrames / totalDuration
