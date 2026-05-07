@@ -1,4 +1,19 @@
+import { readJSON } from '../utils/file-helper.js'
+
+function loadStyleConfig() {
+  return readJSON('data/style-config.json') || {}
+}
+
 export function buildScriptPrompt(topic, keywords, duration, sourceMaterial) {
+  const style = loadStyleConfig()
+  const { colors = {}, fonts = {}, animation = 'minimal' } = style
+  const bg = colors.background || '#1a1a2e'
+  const accent = colors.accent || '#e94560'
+  const text = colors.text || '#ffffff'
+  const codeColor = colors.code || '#f0f0f0'
+  const bodyFont = fonts.body || 'sans-serif'
+  const codeFont = fonts.code || 'monospace'
+
   return {
     system: `你是微课视频脚本编剧。基于知识点生成简洁清晰的微课脚本。
 严格遵守输出格式，只输出三列表格。`,
@@ -29,14 +44,23 @@ ${sourceMaterial || '无'}
 - 1:50-结尾 一句话总结
 
 ## 风格约束
-- 背景使用深色主题（#1a1a2e 或类似）
-- 文字用白色/浅色，代码用等宽字体
-- 动画简洁克制，避免过于花哨
-- 画面以几何图形和示意图为主`,
+- 背景使用深色主题（${bg} 或类似）
+- 文字用${text === '#ffffff' ? '白色/浅色' : text}，代码用${codeFont}字体
+- 动画${animation === 'minimal' ? '简洁克制，避免过于花哨' : animation === 'moderate' ? '适度丰富，突出教学重点' : '丰富生动，体现视觉吸引力'}
+- 画面以几何图形和示意图为主
+- 正文字体使用${bodyFont}`,
   }
 }
 
 export function buildCodePrompt(type, script, slug) {
+  const style = loadStyleConfig()
+  const { colors = {}, fonts = {}, animation = 'minimal' } = style
+  const bg = colors.background || '#1a1a2e'
+  const card = colors.card || '#16213e'
+  const accent = colors.accent || '#e94560'
+  const bodyFont = fonts.body || 'sans-serif'
+  const codeFont = fonts.code || 'monospace'
+
   const typeGuides = {
     html: `生成一个微课视频的 HTML 文件。
 只输出完整的 HTML 代码（含 <!DOCTYPE html> 到 </html>），不要解释。
@@ -46,15 +70,15 @@ export function buildCodePrompt(type, script, slug) {
 - 每个 scene 用 <section class="scene" data-start="起始秒"> 包裹
 - 画面元素：标题、文字说明、几何图形（用 CSS）、代码块
 - 引入同目录的 style.css 和 script.js
-- 使用深色背景主题`,
+- 使用深色背景主题（背景 ${bg}，卡片 ${card}，强调色 ${accent}）`,
 
     css: `生成配套的 CSS 样式文件。
 只输出完整 CSS 代码，不要解释。
 
 要求：
-- 深色背景色板（背景 #1a1a2e，卡片 #16213e，强调色 #0f3460 或 #e94560）
-- 字体：sans-serif 用于正文，等宽字体用于代码
-- 动画：使用 CSS @keyframes，简洁克制
+- 深色背景色板（背景 ${bg}，卡片 ${card}，强调色 ${accent}）
+- 字体：${bodyFont} 用于正文，${codeFont} 用于代码
+- 动画：使用 CSS @keyframes，${animation === 'minimal' ? '简洁克制' : animation === 'moderate' ? '适度丰富' : '可丰富流畅'}
 - 布局：flexbox/grid，保持在 1920x1080 视口内
 - 禁止使用：rounded-{sm|md|lg|xl|2xl|3xl}、shadow（除 shadow-none）、bg-gradient-、opacity-{10|20|30|40|50|60}、font-{light|thin|normal}`,
 

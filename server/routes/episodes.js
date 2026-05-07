@@ -3,6 +3,9 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { readJSON, writeJSON } from '../utils/file-helper.js'
 import { startPipeline } from '../pipeline/orchestrator.js'
+import { readLogs, error } from '../utils/logger.js'
+
+const STYLE_CONFIG_PATH = 'data/style-config.json'
 
 const router = Router()
 const DATA_PATH = 'data/episodes.json'
@@ -47,7 +50,7 @@ router.post('/', async (req, res) => {
 
   // 异步启动流水线
   startPipeline(episode).catch((err) => {
-    console.error(`Pipeline failed for ${slug}:`, err)
+    error(`Pipeline failed for ${slug}: ${err.message}`)
   })
 
   res.status(201).json(episode)
@@ -56,6 +59,21 @@ router.post('/', async (req, res) => {
 router.get('/', (req, res) => {
   const episodes = readJSON(DATA_PATH) || []
   res.json(episodes.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
+})
+
+router.get('/logs', (req, res) => {
+  const limit = parseInt(req.query.limit) || 100
+  res.json(readLogs(limit))
+})
+
+router.get('/style-config', (req, res) => {
+  const config = readJSON(STYLE_CONFIG_PATH) || {}
+  res.json(config)
+})
+
+router.put('/style-config', (req, res) => {
+  writeJSON(STYLE_CONFIG_PATH, req.body)
+  res.json(req.body)
 })
 
 router.get('/:slug', (req, res) => {
@@ -110,8 +128,8 @@ router.post('/:slug/retry', async (req, res) => {
   episode.updatedAt = new Date().toISOString()
   writeJSON(DATA_PATH, episodes)
 
-  startPipeline(episode).catch((err) => {
-    console.error(`Retry failed for ${req.params.slug}:`, err)
+  startPipeline(episode, step || undefined).catch((err) => {
+    error(`Retry failed for ${req.params.slug}: ${err.message}`)
   })
 
   res.json(episode)

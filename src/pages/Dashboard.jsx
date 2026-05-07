@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 
 const statusConfig = {
@@ -17,11 +17,34 @@ function StatusBadge({ status }) {
   )
 }
 
+function Thumbnail({ slug, status }) {
+  const [imgOk, setImgOk] = useState(true)
+  const src = `/videos/${slug}/snapshots/scene_01.png`
+
+  if (status === 'completed' && imgOk) {
+    return (
+      <img
+        src={src}
+        alt=""
+        className="aspect-video bg-gray-800 rounded-lg mb-3 object-cover"
+        onError={() => setImgOk(false)}
+      />
+    )
+  }
+
+  return (
+    <div className="aspect-video bg-gray-800 rounded-lg mb-3 flex items-center justify-center text-gray-600 text-sm">
+      {status === 'running' ? '⏳ 生成中...' : status === 'failed' ? '❌ 失败' : '缩略图'}
+    </div>
+  )
+}
+
 export default function Dashboard() {
   const [episodes, setEpisodes] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
+  const fetchEpisodes = useCallback(() => {
+    setLoading(true)
     fetch('/api/episodes')
       .then((r) => r.json())
       .then(setEpisodes)
@@ -29,21 +52,29 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => { fetchEpisodes() }, [fetchEpisodes])
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">剧集总览</h1>
-        <Link
-          to="/create"
-          className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-        >
-          + 新建剧集
-        </Link>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchEpisodes}
+            className="text-sm text-gray-400 hover:text-white transition-colors"
+          >
+            {loading ? '刷新中...' : '🔄 刷新'}
+          </button>
+          <Link
+            to="/create"
+            className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            + 新建剧集
+          </Link>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="text-center py-20 text-gray-500">加载中...</div>
-      ) : episodes.length === 0 ? (
+      {!loading && episodes.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
           <p className="text-lg mb-2">暂无剧集</p>
           <p>点击「新建剧集」开始你的第一条微课视频</p>
@@ -54,16 +85,19 @@ export default function Dashboard() {
             <Link
               key={ep.slug}
               to={`/episode/${ep.slug}`}
-              className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-tech-600 transition-colors"
+              className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-tech-600 transition-colors group"
             >
-              <div className="aspect-video bg-gray-800 rounded-lg mb-3 flex items-center justify-center text-gray-600 text-sm">
-                {ep.status === 'completed' ? '▶ 点击查看' : '缩略图'}
-              </div>
+              <Thumbnail slug={ep.slug} status={ep.status} />
               <div className="flex items-center justify-between">
-                <h3 className="font-medium">{ep.title}</h3>
+                <h3 className="font-medium group-hover:text-tech-400 transition-colors">
+                  {ep.title}
+                </h3>
                 <StatusBadge status={ep.status} />
               </div>
-              <p className="text-xs text-gray-500 mt-1">{ep.duration} 分钟</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {ep.duration} 分钟
+                {ep.createdAt && ` · ${new Date(ep.createdAt).toLocaleDateString()}`}
+              </p>
             </Link>
           ))}
         </div>

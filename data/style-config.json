@@ -1,0 +1,18 @@
+{
+  "colors": {
+    "background": "#1a1a2e",
+    "card": "#16213e",
+    "accent": "#e94560",
+    "text": "#ffffff",
+    "code": "#f0f0f0"
+  },
+  "fonts": {
+    "body": "sans-serif",
+    "code": "'Fira Code', monospace"
+  },
+  "animation": "minimal",
+  "tts": {
+    "voice": "general",
+    "speed": 1.0
+  }
+}

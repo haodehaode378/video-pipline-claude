@@ -134,19 +134,41 @@ export default function EpisodeDetail() {
           )}
 
           {episode.status === 'failed' && (
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({}),
-                  }).then(() => fetchEpisode())
-                }}
-                className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-              >
-                重试
-              </button>
+            <div className="space-y-3">
+              <div className="flex gap-3 flex-wrap">
+                <button
+                  onClick={() => {
+                    fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({}),
+                    }).then(() => fetchEpisode())
+                  }}
+                  className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
+                >
+                  重试全部
+                </button>
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {stepOrder.map((key) => {
+                  if (episode.steps[key] !== 'failed') return null
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ step: key }),
+                        }).then(() => fetchEpisode())
+                      }}
+                      className="bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                    >
+                      重试: {stepNames[key]}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -168,7 +190,7 @@ export default function EpisodeDetail() {
               {episode.status === 'failed' ? '下载视频（已失败）' : '下载视频（待生成）'}
             </button>
           )}
-          <LogPanel logs={logs} />
+          <LogPanel logs={logs} live />
         </aside>
       </div>
 
