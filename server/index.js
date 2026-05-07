@@ -6,6 +6,7 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import episodesRouter from './routes/episodes.js'
+import { listTemplates, getTemplateContent } from './utils/templates.js'
 import { setBroadcaster } from './pipeline/orchestrator.js'
 
 const app = express()
@@ -19,6 +20,16 @@ app.use(express.json())
 app.use('/videos', express.static(path.join(__dirname, '..', 'videos')))
 
 app.use('/api/episodes', episodesRouter)
+
+app.get('/api/templates', (req, res) => {
+  res.json(listTemplates())
+})
+
+app.get('/api/templates/:slug', (req, res) => {
+  const t = getTemplateContent(req.params.slug)
+  if (!t) return res.status(404).json({ error: 'not found' })
+  res.json(t)
+})
 
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })

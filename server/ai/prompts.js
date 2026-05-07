@@ -1,7 +1,18 @@
 import { readJSON } from '../utils/file-helper.js'
+import { getTemplateContent } from '../utils/templates.js'
 
 function loadStyleConfig() {
   return readJSON('data/style-config.json') || {}
+}
+
+function getTemplatePrompt(slug) {
+  if (!slug) return ''
+  const t = getTemplateContent(slug)
+  if (!t) return ''
+  // Return the hard prompt portion (skip the metadata header)
+  const idx = t.content.indexOf('# Hard Prompt')
+  if (idx === -1) return t.content
+  return `\n## 风格模板约束（${t.name}）\n${t.content.slice(idx)}`
 }
 
 export function buildScriptPrompt(topic, keywords, duration, sourceMaterial) {
@@ -54,12 +65,14 @@ ${sourceMaterial || '无'}
 
 export function buildCodePrompt(type, script, slug) {
   const style = loadStyleConfig()
-  const { colors = {}, fonts = {}, animation = 'minimal' } = style
+  const { colors = {}, fonts = {}, animation = 'minimal', template } = style
   const bg = colors.background || '#1a1a2e'
   const card = colors.card || '#16213e'
   const accent = colors.accent || '#e94560'
   const bodyFont = fonts.body || 'sans-serif'
   const codeFont = fonts.code || 'monospace'
+
+  const templatePrompt = getTemplatePrompt(template)
 
   const typeGuides = {
     html: `生成一个微课视频的 HTML 文件。
@@ -103,6 +116,6 @@ ${slug}
 ## 输出类型
 ${type}
 
-${typeGuides[type] || ''}`,
+${typeGuides[type] || ''}${templatePrompt}`,
   }
 }
