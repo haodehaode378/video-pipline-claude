@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@theme {
+  --color-tech-50: #eff6ff;
+  --color-tech-100: #dbeafe;
+  --color-tech-200: #bfdbfe;
+  --color-tech-300: #93c5fd;
+  --color-tech-400: #60a5fa;
+  --color-tech-500: #3b82f6;
+  --color-tech-600: #2563eb;
+  --color-tech-700: #1d4ed8;
+  --color-tech-800: #1e40af;
+  --color-tech-900: #1e3a8a;
+}
+
+body {
+  @apply bg-gray-950 text-gray-100;
+}

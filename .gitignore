@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Secrets
+.env
+
+# Runtime data
+data/episodes.json
+server.log
+
+# Generated output
+videos/*
+scripts/*
+!videos/.gitkeep
+!scripts/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
