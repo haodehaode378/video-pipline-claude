@@ -20,12 +20,32 @@ export async function runStep4(episode, fps = 30) {
   try {
     browser = await puppeteer.launch({ headless: true })
     const page = await browser.newPage()
+    const pageErrors = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') pageErrors.push(msg.text())
+    })
     await page.setViewport({ width: 1920, height: 1080 })
 
     const fileUrl = `file:///${htmlPath.replace(/\\/g, '/')}`
     await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 })
+    await new Promise((r) => setTimeout(r, 300))
 
-    // Get total duration
+    if (pageErrors.length > 0) {
+      return { success: false, error: `Page error before render: ${pageErrors.slice(0, 3).join('; ')}` }
+    }
+
+    const renderState = await page.evaluate(() => ({
+      hasRoot: Boolean(document.getElementById('root')),
+      hasSeek: typeof window.__hfSeek === 'function',
+      sceneCount: document.querySelectorAll('.scene[data-start]').length,
+    }))
+    if (!renderState.hasRoot) return { success: false, error: 'Missing #root element' }
+    if (!renderState.hasSeek) return { success: false, error: 'Missing window.__hfSeek(seconds)' }
+    if (renderState.sceneCount === 0) {
+      return { success: false, error: 'No .scene[data-start] elements found. Refusing to render black video.' }
+    }
+
     const totalDuration = await page.evaluate(() => {
       const root = document.getElementById('root')
       return root?.dataset?.duration ? parseFloat(root.dataset.duration) : 60
@@ -34,7 +54,6 @@ export async function runStep4(episode, fps = 30) {
     const totalFrames = Math.ceil(totalDuration * fps)
     console.log(`[Step4] Duration: ${totalDuration}s, Frames: ${totalFrames} @ ${fps}fps`)
 
-    // Capture frames (with a frame-skip threshold for speed — max 90 frames)
     const maxFrames = Math.min(totalFrames, 90)
     const step = Math.max(1, Math.floor(totalFrames / maxFrames))
     const actualFrames = Math.ceil(totalFrames / step)
@@ -45,18 +64,16 @@ export async function runStep4(episode, fps = 30) {
     for (let i = 0; i < totalFrames; i += step) {
       const time = i / fps
       await page.evaluate((t) => {
-        if (window.__hfSeek) window.__hfSeek(t)
+        window.__hfSeek(t)
       }, time)
       await page.screenshot({
         path: path.join(framesDir, `frame_${String(Math.floor(i / step)).padStart(5, '0')}.png`),
       })
     }
 
-    // Combine frames into MP4
     console.log('[Step4] Encoding MP4 with ffmpeg...')
     await imagesToVideo(framesDir, outputPath, actualFps)
 
-    // Clean up frames to save space
     for (const f of fs.readdirSync(framesDir)) {
       fs.unlinkSync(path.join(framesDir, f))
     }

@@ -15,7 +15,7 @@ function NavBar() {
   return (
     <nav className="flex items-center gap-6 px-6 py-3 bg-gray-900 border-b border-gray-800">
       <Link to="/" className="text-tech-400 font-bold text-lg tracking-tight">
-        AI-Vedio
+        AI-Video
       </Link>
       {navItems.map(({ path, label }) => (
         <Link

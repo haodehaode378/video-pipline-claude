@@ -37,7 +37,7 @@ export default function CodePreview({ code, slug, onSaved }) {
       setMsg('已保存')
       if (onSaved) onSaved(updated)
     } catch (err) {
-      setMsg(`错误: ${err.message}`)
+      setMsg(`错误：${err.message}`)
     } finally {
       setSaving(false)
     }

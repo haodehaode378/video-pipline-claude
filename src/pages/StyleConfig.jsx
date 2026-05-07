@@ -9,14 +9,14 @@ const defaultConfig = {
 }
 
 const animationOptions = [
-  { value: 'minimal', label: '简约', desc: '简洁克制，适合严肃教学' },
+  { value: 'minimal', label: '简洁', desc: '克制清晰，适合严肃教学' },
   { value: 'moderate', label: '适中', desc: '适度丰富，突出重点' },
-  { value: 'rich', label: '丰富', desc: '生动流畅，视觉吸引力强' },
+  { value: 'rich', label: '丰富', desc: '更强动效，强调视觉吸引力' },
 ]
 
 const voiceOptions = [
   { value: 'general', label: '通用' },
-  { value: 'male-qn-qingse', label: '青涩男声' },
+  { value: 'male-qn-qingse', label: '青年男声' },
   { value: 'female-shaonv', label: '少女女声' },
   { value: 'male-qn-jingying', label: '精英男声' },
   { value: 'presenter_male', label: '男主持人' },
@@ -29,7 +29,6 @@ export default function StyleConfig() {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
   const [templates, setTemplates] = useState([])
-  const [previewSlug, setPreviewSlug] = useState(null)
 
   useEffect(() => {
     Promise.all([
@@ -56,7 +55,7 @@ export default function StyleConfig() {
       if (!res.ok) throw new Error('保存失败')
       setMsg('已保存')
     } catch (err) {
-      setMsg(`错误: ${err.message}`)
+      setMsg(`错误：${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -80,7 +79,7 @@ export default function StyleConfig() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold">风格配置</h1>
-          <p className="text-sm text-gray-500">自定义微课视频的视觉风格、配色和字体</p>
+          <p className="text-sm text-gray-500">设置全局默认风格。单集未选择风格时会使用这里的配置。</p>
         </div>
         <div className="flex items-center gap-3">
           {msg && <span className={`text-xs ${msg.startsWith('错误') ? 'text-red-400' : 'text-green-400'}`}>{msg}</span>}
@@ -94,10 +93,9 @@ export default function StyleConfig() {
         </div>
       </div>
 
-      {/* Template Gallery */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-1">🎨 风格模板</h2>
-        <p className="text-xs text-gray-600 mb-4">选择预设风格模板，AI 将严格遵循该风格的设计系统生成代码。选「自定义」则使用下方配色/字体配置。</p>
+        <h2 className="text-sm font-medium text-gray-300 mb-1">默认风格模板</h2>
+        <p className="text-xs text-gray-600 mb-4">这里是全局兜底。新建剧集时单独选择的风格会优先于这里。</p>
         <div className="flex flex-wrap gap-2 mb-4">
           <button
             onClick={() => setConfig((c) => ({ ...c, template: '' }))}
@@ -131,10 +129,9 @@ export default function StyleConfig() {
         )}
       </section>
 
-      {/* Color palette — only shown when no template selected */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-4">🎨 配色方案</h2>
-        <div className="grid grid-cols-2 gap-4">
+        <h2 className="text-sm font-medium text-gray-300 mb-4">配色方案</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
             { key: 'background', label: '背景色' },
             { key: 'card', label: '卡片色' },
@@ -144,54 +141,62 @@ export default function StyleConfig() {
           ].map(({ key, label }) => (
             <div key={key} className="flex items-center gap-3">
               <label className="text-xs text-gray-400 w-20">{label}</label>
-              <input type="color" value={config.colors[key] || '#000'}
+              <input
+                type="color"
+                value={config.colors[key] || '#000000'}
                 onChange={(e) => updateColor(key, e.target.value)}
-                className="w-8 h-8 rounded cursor-pointer bg-transparent border border-gray-700" />
-              <input type="text" value={config.colors[key] || ''}
+                className="w-8 h-8 rounded cursor-pointer bg-transparent border border-gray-700"
+              />
+              <input
+                type="text"
+                value={config.colors[key] || ''}
                 onChange={(e) => updateColor(key, e.target.value)}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 font-mono" />
+                className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 font-mono"
+              />
             </div>
           ))}
         </div>
-        <div className="mt-4 p-4 rounded-lg" style={{ backgroundColor: config.colors.background }}>
-          <div className="p-3 rounded" style={{ backgroundColor: config.colors.card }}>
-            <p className="text-sm" style={{ color: config.colors.text, fontFamily: config.fonts.body }}>预览文字</p>
-            <code className="text-xs" style={{ color: config.colors.code, fontFamily: config.fonts.code }}>code example</code>
-          </div>
-        </div>
       </section>
 
-      {/* Fonts */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-4">🔤 字体</h2>
+        <h2 className="text-sm font-medium text-gray-300 mb-4">字体</h2>
         <div className="space-y-3">
           <div>
             <label className="text-xs text-gray-400 block mb-1">正文字体</label>
-            <input type="text" value={config.fonts.body || ''}
+            <input
+              type="text"
+              value={config.fonts.body || ''}
               onChange={(e) => updateFont('body', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300" placeholder="sans-serif" />
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300"
+              placeholder="sans-serif"
+            />
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">代码字体</label>
-            <input type="text" value={config.fonts.code || ''}
+            <input
+              type="text"
+              value={config.fonts.code || ''}
               onChange={(e) => updateFont('code', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300" placeholder="monospace" />
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300"
+              placeholder="monospace"
+            />
           </div>
         </div>
       </section>
 
-      {/* Animation */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-4">✨ 动画风格</h2>
-        <div className="flex gap-2">
+        <h2 className="text-sm font-medium text-gray-300 mb-4">动画风格</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {animationOptions.map((opt) => (
-            <button key={opt.value}
+            <button
+              key={opt.value}
               onClick={() => setConfig((c) => ({ ...c, animation: opt.value }))}
-              className={`flex-1 p-3 rounded-lg border text-sm transition-colors ${
+              className={`p-3 rounded-lg border text-sm transition-colors ${
                 config.animation === opt.value
                   ? 'border-tech-500 bg-tech-500/10 text-tech-400'
                   : 'border-gray-700 hover:border-gray-600 text-gray-400'
-              }`}>
+              }`}
+            >
               <div className="font-medium">{opt.label}</div>
               <div className="text-xs text-gray-500 mt-0.5">{opt.desc}</div>
             </button>
@@ -199,24 +204,30 @@ export default function StyleConfig() {
         </div>
       </section>
 
-      {/* TTS */}
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-4">🔊 TTS 语音</h2>
+        <h2 className="text-sm font-medium text-gray-300 mb-4">TTS 语音</h2>
         <div className="space-y-4">
           <div>
             <label className="text-xs text-gray-400 block mb-1">音色</label>
-            <select value={config.tts.voice || 'general'}
+            <select
+              value={config.tts.voice || 'general'}
               onChange={(e) => updateTTS('voice', e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300">
+              className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-xs text-gray-300"
+            >
               {voiceOptions.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
             </select>
           </div>
           <div>
             <label className="text-xs text-gray-400 block mb-1">语速：{config.tts.speed?.toFixed(1) || '1.0'}x</label>
-            <input type="range" min="0.5" max="2.0" step="0.1"
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.1"
               value={config.tts.speed || 1.0}
               onChange={(e) => updateTTS('speed', parseFloat(e.target.value))}
-              className="w-full accent-tech-500" />
+              className="w-full accent-tech-500"
+            />
             <div className="flex justify-between text-xs text-gray-600">
               <span>0.5x</span><span>1.0x</span><span>2.0x</span>
             </div>

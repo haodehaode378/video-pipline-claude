@@ -1,5 +1,6 @@
 import { readJSON, writeJSON } from '../utils/file-helper.js'
-import { info, error } from '../utils/logger.js'
+import { info } from '../utils/logger.js'
+import { runStep0 } from './step0-research.js'
 import { runStep1 } from './step1-script.js'
 import { runStep2 } from './step2-code.js'
 import { runStep3 } from './step3-snapshot.js'
@@ -13,39 +14,78 @@ export function setBroadcaster(fn) { broadcast = fn }
 
 const DATA_PATH = 'data/episodes.json'
 
-const stepOrder = ['script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
+const stepOrder = ['research', 'script', 'code', 'snapshot', 'render', 'narration', 'tts', 'mux']
 
 function updateEpisode(slug, updater) {
   const episodes = readJSON(DATA_PATH) || []
   const idx = episodes.findIndex((e) => e.slug === slug)
-  if (idx === -1) return
+  if (idx === -1) return null
   updater(episodes[idx])
   episodes[idx].updatedAt = new Date().toISOString()
   writeJSON(DATA_PATH, episodes)
   if (broadcast) broadcast(slug, episodes[idx])
+  return episodes[idx]
 }
 
 function getStepIndex(stepName) {
   return stepOrder.indexOf(stepName)
 }
 
-export async function startPipeline(episode, startFrom) {
+function shouldRun(stepName, startIdx, stopIdx) {
+  const idx = getStepIndex(stepName)
+  return idx >= startIdx && idx <= stopIdx
+}
+
+export async function startPipeline(episode, startFrom, options = {}) {
   const slug = episode.slug
   const fps = parseInt(process.env.RENDER_FPS) || 30
   const startIdx = startFrom ? getStepIndex(startFrom) : 0
+  const stopIdx = options.stopAfter ? getStepIndex(options.stopAfter) : stepOrder.length - 1
+
+  if (startIdx === -1) {
+    updateEpisode(slug, (ep) => {
+      ep.status = 'failed'
+      ep.error = `Unknown pipeline step: ${startFrom}`
+    })
+    return
+  }
+  if (stopIdx === -1) {
+    updateEpisode(slug, (ep) => {
+      ep.status = 'failed'
+      ep.error = `Unknown pipeline stop step: ${options.stopAfter}`
+    })
+    return
+  }
+
   info(`[Pipeline] Starting for "${episode.title}" (${slug})${startFrom ? ` from step: ${startFrom}` : ''}`)
 
   updateEpisode(slug, (ep) => {
     ep.status = 'running'
     ep.error = null
-    // Reset steps from startFrom onward
-    for (let i = startIdx; i < stepOrder.length; i++) {
+    for (let i = startIdx; i <= stopIdx; i++) {
       ep.steps[stepOrder[i]] = 'pending'
     }
   })
 
-  // Step 1: Script
-  if (startIdx <= 0) {
+  if (shouldRun('research', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.research = 'running' })
+    const r = await runStep0(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.research = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.research = 'completed'
+      ep.researchContent = r.content
+      if (stopIdx === getStepIndex('research')) ep.status = 'research_completed'
+    })
+  }
+
+  if (shouldRun('script', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.script = 'running' })
     const r = await runStep1(episode)
     if (!r.success) {
@@ -62,8 +102,7 @@ export async function startPipeline(episode, startFrom) {
     })
   }
 
-  // Step 2: Code
-  if (startIdx <= 1) {
+  if (shouldRun('code', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.code = 'running' })
     const r = await runStep2(episode)
     if (!r.success) {
@@ -80,24 +119,22 @@ export async function startPipeline(episode, startFrom) {
     })
   }
 
-  // Steps 3+4: parallel
-  if (startIdx <= 2 || startIdx <= 3) {
+  if (shouldRun('snapshot', startIdx, stopIdx) || shouldRun('render', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => {
-      if (startIdx <= 2) ep.steps.snapshot = 'running'
-      if (startIdx <= 3) ep.steps.render = 'running'
+      if (shouldRun('snapshot', startIdx, stopIdx)) ep.steps.snapshot = 'running'
+      if (shouldRun('render', startIdx, stopIdx)) ep.steps.render = 'running'
     })
 
-    const promises = []
-    if (startIdx <= 2) promises.push(runStep3(episode))
-    else promises.push(Promise.resolve({ success: true, skip: true }))
-    if (startIdx <= 3) promises.push(runStep4(episode, fps))
-    else promises.push(Promise.resolve({ success: true, skip: true }))
+    const promises = [
+      shouldRun('snapshot', startIdx, stopIdx) ? runStep3(episode) : Promise.resolve({ success: true, skip: true }),
+      shouldRun('render', startIdx, stopIdx) ? runStep4(episode, fps) : Promise.resolve({ success: true, skip: true }),
+    ]
 
     const [s3, s4] = await Promise.all(promises)
 
     updateEpisode(slug, (ep) => {
-      if (startIdx <= 2) ep.steps.snapshot = s3.success ? 'completed' : 'failed'
-      if (startIdx <= 3) ep.steps.render = s4.success ? 'completed' : 'failed'
+      if (shouldRun('snapshot', startIdx, stopIdx)) ep.steps.snapshot = s3.success ? 'completed' : 'failed'
+      if (shouldRun('render', startIdx, stopIdx)) ep.steps.render = s4.success ? 'completed' : 'failed'
     })
 
     if (!s3.success || !s4.success) {
@@ -109,8 +146,7 @@ export async function startPipeline(episode, startFrom) {
     }
   }
 
-  // Step 5: Narration
-  if (startIdx <= 4) {
+  if (shouldRun('narration', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.narration = 'running' })
     const r = await runStep5(episode)
     if (!r.success) {
@@ -124,8 +160,7 @@ export async function startPipeline(episode, startFrom) {
     updateEpisode(slug, (ep) => { ep.steps.narration = 'completed' })
   }
 
-  // Step 6: TTS
-  if (startIdx <= 5) {
+  if (shouldRun('tts', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.tts = 'running' })
     const r = await runStep6(episode)
     if (!r.success) {
@@ -139,8 +174,7 @@ export async function startPipeline(episode, startFrom) {
     updateEpisode(slug, (ep) => { ep.steps.tts = 'completed' })
   }
 
-  // Step 7: Mux
-  if (startIdx <= 6) {
+  if (shouldRun('mux', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.mux = 'running' })
     const r = await runStep7(episode)
     updateEpisode(slug, (ep) => {
@@ -148,7 +182,13 @@ export async function startPipeline(episode, startFrom) {
       ep.status = r.success ? 'completed' : 'failed'
       if (!r.success) ep.error = r.error
     })
+  } else if (stopIdx > getStepIndex('research')) {
+    updateEpisode(slug, (ep) => {
+      ep.status = 'completed'
+    })
   }
 
   info(`[Pipeline] Completed for "${episode.title}"`)
 }
+
+export { stepOrder }

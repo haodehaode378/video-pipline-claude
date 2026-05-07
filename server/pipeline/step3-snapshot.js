@@ -15,12 +15,21 @@ export async function runStep3(episode) {
   try {
     browser = await puppeteer.launch({ headless: true })
     const page = await browser.newPage()
+    const pageErrors = []
+    page.on('pageerror', (err) => pageErrors.push(err.message))
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') pageErrors.push(msg.text())
+    })
     await page.setViewport({ width: 1920, height: 1080 })
 
     const fileUrl = `file:///${htmlPath.replace(/\\/g, '/')}`
     await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 15000 })
+    await new Promise((r) => setTimeout(r, 300))
 
-    // Get all scene data-start times
+    if (pageErrors.length > 0) {
+      return { success: false, error: `Page error before snapshot: ${pageErrors.slice(0, 3).join('; ')}` }
+    }
+
     const scenes = await page.evaluate(() => {
       const els = document.querySelectorAll('.scene[data-start]')
       return Array.from(els).map((el) => ({
@@ -29,9 +38,7 @@ export async function runStep3(episode) {
     })
 
     if (scenes.length === 0) {
-      console.warn('[Step3] No .scene[data-start] elements found — taking single screenshot')
-      await page.screenshot({ path: path.join(snapDir, 'scene_00.png') })
-      return { success: true, output: snapDir, count: 1 }
+      return { success: false, error: 'No .scene[data-start] elements found. Generated HTML is not renderable.' }
     }
 
     for (let i = 0; i < scenes.length; i++) {

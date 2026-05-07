@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const LOG_FILE = path.resolve('server.log')
-const MAX_LINES = 5000
 
 function timestamp() {
   return new Date().toISOString().replace('T', ' ').replace('Z', '')
@@ -12,7 +11,9 @@ function writeLine(level, message) {
   const line = `[${timestamp()}] [${level.toUpperCase()}] ${message}\n`
   try {
     fs.appendFileSync(LOG_FILE, line)
-  } catch {}
+  } catch {
+    // Logging must never break the pipeline.
+  }
 }
 
 export function info(msg) {

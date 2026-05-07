@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 const statusConfig = {
   pending: { label: '待生成', color: 'bg-gray-600' },
   running: { label: '生成中', color: 'bg-tech-500 animate-pulse' },
+  research_completed: { label: '资料完成', color: 'bg-amber-500' },
   completed: { label: '已完成', color: 'bg-green-500' },
   failed: { label: '失败', color: 'bg-red-500' },
 }
@@ -34,7 +35,7 @@ function Thumbnail({ slug, status }) {
 
   return (
     <div className="aspect-video bg-gray-800 rounded-lg mb-3 flex items-center justify-center text-gray-600 text-sm">
-      {status === 'running' ? '⏳ 生成中...' : status === 'failed' ? '❌ 失败' : '缩略图'}
+      {status === 'running' ? '生成中...' : status === 'failed' ? '生成失败' : '暂无缩略图'}
     </div>
   )
 }
@@ -52,7 +53,10 @@ export default function Dashboard() {
       .finally(() => setLoading(false))
   }, [])
 
-  useEffect(() => { fetchEpisodes() }, [fetchEpisodes])
+  useEffect(() => {
+    const timer = setTimeout(fetchEpisodes, 0)
+    return () => clearTimeout(timer)
+  }, [fetchEpisodes])
 
   return (
     <div>
@@ -63,13 +67,13 @@ export default function Dashboard() {
             onClick={fetchEpisodes}
             className="text-sm text-gray-400 hover:text-white transition-colors"
           >
-            {loading ? '刷新中...' : '🔄 刷新'}
+            {loading ? '刷新中...' : '刷新'}
           </button>
           <Link
             to="/create"
             className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
           >
-            + 新建剧集
+            新建剧集
           </Link>
         </div>
       </div>
@@ -77,7 +81,7 @@ export default function Dashboard() {
       {!loading && episodes.length === 0 ? (
         <div className="text-center py-20 text-gray-500">
           <p className="text-lg mb-2">暂无剧集</p>
-          <p>点击「新建剧集」开始你的第一条微课视频</p>
+          <p>点击“新建剧集”开始第一条微课视频。</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -88,8 +92,8 @@ export default function Dashboard() {
               className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-tech-600 transition-colors group"
             >
               <Thumbnail slug={ep.slug} status={ep.status} />
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium group-hover:text-tech-400 transition-colors">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="font-medium group-hover:text-tech-400 transition-colors truncate">
                   {ep.title}
                 </h3>
                 <StatusBadge status={ep.status} />

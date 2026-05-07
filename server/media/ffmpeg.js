@@ -6,7 +6,7 @@ const FFMPEG = 'ffmpeg'
 
 function run(args, timeout = 300000) {
   return new Promise((resolve, reject) => {
-    const proc = execFile(FFMPEG, args, { timeout }, (err, stdout, stderr) => {
+    execFile(FFMPEG, args, { timeout }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message))
       else resolve(stdout || stderr)
     })

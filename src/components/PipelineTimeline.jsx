@@ -1,10 +1,11 @@
 const steps = [
+  '资料收集',
   '生成脚本',
-  '生成HTML',
+  '生成 HTML',
   '预览截图',
   '渲染视频',
   '生成旁白',
-  '生成TTS',
+  '生成 TTS',
   '合成成片',
 ]
 
@@ -17,7 +18,7 @@ export default function PipelineTimeline({ currentStep = 0, failed = false }) {
         const isActive = stepNum === currentStep
         const isFailed = failed && isActive
         return (
-          <div key={i} className="flex items-center gap-1 shrink-0">
+          <div key={label} className="flex items-center gap-1 shrink-0">
             <div
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                 isFailed
@@ -40,7 +41,7 @@ export default function PipelineTimeline({ currentStep = 0, failed = false }) {
                         : 'bg-gray-700'
                 }`}
               >
-                {isFailed ? '✕' : isDone ? '✓' : stepNum}
+                {isFailed ? '!' : isDone ? '✓' : stepNum}
               </span>
               {label}
             </div>

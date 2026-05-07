@@ -1,15 +1,22 @@
 import { sendMessage } from '../ai/claude-client.js'
 import { buildScriptPrompt } from '../ai/prompts.js'
-import { writeText, getScriptDir } from '../utils/file-helper.js'
+import { writeText, getScriptDir, readText } from '../utils/file-helper.js'
 
 export async function runStep1(episode) {
   console.log(`[Step1] Generating script for "${episode.title}"...`)
+
+  const scriptDir = getScriptDir(episode.slug)
+  const research = readText(`${scriptDir}/research.md`)
+  if (!research) {
+    return { success: false, error: 'research.md not found. Run research first.' }
+  }
 
   const { system, user } = buildScriptPrompt(
     episode.title,
     episode.keywords,
     episode.duration,
     episode.sourceMaterial,
+    research,
   )
 
   const result = await sendMessage(system, user, { maxTokens: 4096 })
@@ -17,7 +24,6 @@ export async function runStep1(episode) {
     return { success: false, error: result.error }
   }
 
-  const scriptDir = getScriptDir(episode.slug)
   const outputPath = `${scriptDir}/script.md`
   writeText(outputPath, result.text)
 

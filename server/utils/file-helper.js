@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const DATA_DIR = path.resolve('data')
 const VIDEOS_DIR = path.resolve('videos')
 const SCRIPTS_DIR = path.resolve('scripts')
 

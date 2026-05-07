@@ -2,7 +2,7 @@ import { Router } from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
 import { readJSON, writeJSON } from '../utils/file-helper.js'
-import { startPipeline } from '../pipeline/orchestrator.js'
+import { startPipeline, stepOrder } from '../pipeline/orchestrator.js'
 import { readLogs, error } from '../utils/logger.js'
 
 const STYLE_CONFIG_PATH = 'data/style-config.json'
@@ -18,46 +18,95 @@ function slugify(text) {
     .slice(0, 60)
 }
 
+function defaultSteps() {
+  return Object.fromEntries(stepOrder.map((step) => [step, 'pending']))
+}
+
+function normalizeEpisode(episode) {
+  return {
+    ...episode,
+    steps: { ...defaultSteps(), ...(episode.steps || {}) },
+  }
+}
+
+function readEpisodes() {
+  return (readJSON(DATA_PATH) || []).map(normalizeEpisode)
+}
+
+function writeEpisodes(episodes) {
+  writeJSON(DATA_PATH, episodes.map(normalizeEpisode))
+}
+
+function findEpisode(slug) {
+  const episodes = readEpisodes()
+  return { episodes, episode: episodes.find((e) => e.slug === slug) }
+}
+
 router.post('/', async (req, res) => {
-  const { title, keywords, duration, template } = req.body
+  const { title, keywords, duration, template, sourceMaterial } = req.body
   if (!title) return res.status(400).json({ error: 'title is required' })
 
-  const slug = slugify(title) + '-' + Date.now().toString(36)
+  const slugBase = slugify(title) || 'episode'
+  const slug = `${slugBase}-${Date.now().toString(36)}`
   const episode = {
     slug,
     title,
     keywords: keywords || '',
     duration: duration || 3,
     template: template || '',
+    sourceMaterial: sourceMaterial || '',
     status: 'pending',
-    steps: {
-      script: 'pending',
-      code: 'pending',
-      snapshot: 'pending',
-      render: 'pending',
-      narration: 'pending',
-      tts: 'pending',
-      mux: 'pending',
-    },
+    steps: defaultSteps(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     error: null,
   }
 
-  const episodes = readJSON(DATA_PATH) || []
+  const episodes = readEpisodes()
   episodes.push(episode)
-  writeJSON(DATA_PATH, episodes)
-
-  // 异步启动流水线
-  startPipeline(episode).catch((err) => {
-    error(`Pipeline failed for ${slug}: ${err.message}`)
-  })
+  writeEpisodes(episodes)
 
   res.status(201).json(episode)
 })
 
+router.post('/:slug/research', async (req, res) => {
+  const { episodes, episode } = findEpisode(req.params.slug)
+  if (!episode) return res.status(404).json({ error: 'not found' })
+
+  episode.status = 'running'
+  episode.error = null
+  episode.steps.research = 'pending'
+  episode.updatedAt = new Date().toISOString()
+  writeEpisodes(episodes)
+
+  startPipeline(episode, 'research', { stopAfter: 'research' }).catch((err) => {
+    error(`Research failed for ${req.params.slug}: ${err.message}`)
+  })
+
+  res.json(episode)
+})
+
+router.post('/:slug/generate', async (req, res) => {
+  const { episodes, episode } = findEpisode(req.params.slug)
+  if (!episode) return res.status(404).json({ error: 'not found' })
+  if (episode.steps.research !== 'completed') {
+    return res.status(409).json({ error: 'research must be completed before generation' })
+  }
+
+  episode.status = 'running'
+  episode.error = null
+  episode.updatedAt = new Date().toISOString()
+  writeEpisodes(episodes)
+
+  startPipeline(episode, 'script').catch((err) => {
+    error(`Generate failed for ${req.params.slug}: ${err.message}`)
+  })
+
+  res.json(episode)
+})
+
 router.get('/', (req, res) => {
-  const episodes = readJSON(DATA_PATH) || []
+  const episodes = readEpisodes()
   res.json(episodes.sort((a, b) => b.createdAt.localeCompare(a.createdAt)))
 })
 
@@ -77,31 +126,28 @@ router.put('/style-config', (req, res) => {
 })
 
 router.get('/:slug', (req, res) => {
-  const episodes = readJSON(DATA_PATH) || []
-  const episode = episodes.find((e) => e.slug === req.params.slug)
+  const { episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
   res.json(episode)
 })
 
 router.put('/:slug/script', (req, res) => {
-  const episodes = readJSON(DATA_PATH) || []
-  const episode = episodes.find((e) => e.slug === req.params.slug)
+  const { episodes, episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
 
   episode.scriptContent = req.body.content
   episode.updatedAt = new Date().toISOString()
-  writeJSON(DATA_PATH, episodes)
+  writeEpisodes(episodes)
   res.json(episode)
 })
 
 router.put('/:slug/code', (req, res) => {
-  const episodes = readJSON(DATA_PATH) || []
-  const episode = episodes.find((e) => e.slug === req.params.slug)
+  const { episodes, episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
 
   episode.codeContent = req.body
   episode.updatedAt = new Date().toISOString()
-  writeJSON(DATA_PATH, episodes)
+  writeEpisodes(episodes)
   res.json(episode)
 })
 
@@ -117,18 +163,19 @@ router.get('/:slug/download', (req, res) => {
 })
 
 router.post('/:slug/retry', async (req, res) => {
-  const episodes = readJSON(DATA_PATH) || []
-  const episode = episodes.find((e) => e.slug === req.params.slug)
+  const { episodes, episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
 
-  const { step } = req.body
-  if (step) episode.steps[step] = 'pending'
+  const step = req.body.step || 'research'
+  if (!stepOrder.includes(step)) return res.status(400).json({ error: `unknown step: ${step}` })
+
+  episode.steps[step] = 'pending'
   episode.status = 'running'
   episode.error = null
   episode.updatedAt = new Date().toISOString()
-  writeJSON(DATA_PATH, episodes)
+  writeEpisodes(episodes)
 
-  startPipeline(episode, step || undefined).catch((err) => {
+  startPipeline(episode, step).catch((err) => {
     error(`Retry failed for ${req.params.slug}: ${err.message}`)
   })
 

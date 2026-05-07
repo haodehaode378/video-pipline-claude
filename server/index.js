@@ -50,7 +50,9 @@ wss.on('connection', (ws) => {
         }
         subscribers.get(msg.slug).add(ws)
       }
-    } catch {}
+    } catch {
+      // Ignore malformed websocket messages from clients.
+    }
   })
 
   ws.on('close', () => {

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 
 function parseScriptTable(markdown) {
   const segments = []
@@ -63,7 +63,7 @@ export default function ScriptEditor({ content, slug, onSaved }) {
       setMsg('已保存')
       if (onSaved) onSaved(markdown)
     } catch (err) {
-      setMsg(`错误: ${err.message}`)
+      setMsg(`错误：${err.message}`)
     } finally {
       setSaving(false)
     }
@@ -97,7 +97,7 @@ export default function ScriptEditor({ content, slug, onSaved }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-800">
-              <th className="text-left py-2 px-2 text-gray-500 font-medium w-16">时间</th>
+              <th className="text-left py-2 px-2 text-gray-500 font-medium w-20">时间</th>
               <th className="text-left py-2 px-2 text-gray-500 font-medium w-1/3">画面</th>
               <th className="text-left py-2 px-2 text-gray-500 font-medium">旁白</th>
             </tr>
@@ -107,13 +107,16 @@ export default function ScriptEditor({ content, slug, onSaved }) {
               <tr key={i} className="border-b border-gray-800/50">
                 <td className="py-2 px-2 text-gray-400 text-xs align-top">
                   <input
-                    className="w-16 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-gray-300"
+                    className="w-20 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-gray-300"
                     value={seg.timeRange}
                     onChange={(ev) => {
                       const next = [...segments]
                       next[i] = { ...next[i], timeRange: ev.target.value }
                       const [s, end] = ev.target.value.split('-')
-                      const toS = (t) => { const p = t.trim().split(':'); return parseInt(p[0])*60 + parseInt(p[1]) }
+                      const toS = (t) => {
+                        const p = t.trim().split(':')
+                        return parseInt(p[0]) * 60 + parseInt(p[1])
+                      }
                       if (s && end) {
                         next[i].start = toS(s)
                         next[i].end = toS(end)
