@@ -101,6 +101,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
       ep.steps.script = 'completed'
       ep.scriptContent = r.content
       if (r.storyboardContent) ep.storyboardContent = r.storyboardContent
+      if (stopIdx === getStepIndex('script')) ep.status = 'storyboard_ready'
     })
   }
 
@@ -208,7 +209,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
       ep.status = r.success ? 'completed' : 'failed'
       if (!r.success) ep.error = r.error
     })
-  } else if (stopIdx > getStepIndex('research')) {
+  } else if (stopIdx > getStepIndex('research') && stopIdx !== getStepIndex('script')) {
     updateEpisode(slug, (ep) => {
       ep.status = 'completed'
     })

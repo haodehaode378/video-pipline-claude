@@ -129,3 +129,58 @@ describe('stepOrder', () => {
     expect(stepOrder).toContain('mux')
   })
 })
+
+describe('storyboard helpers', () => {
+  it('validates a legal storyboard payload', async () => {
+    const { validateStoryboardPayload } = await import('./episodes.js')
+    const result = validateStoryboardPayload({
+      scenes: [{
+        id: 'scene-01',
+        visual: '显示流程图',
+        narration: '这里解释核心流程。',
+        minDuration: 3,
+        maxDuration: 8,
+      }],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.storyboard.scenes[0].id).toBe('scene-01')
+  })
+
+  it('rejects invalid storyboard timing', async () => {
+    const { validateStoryboardPayload } = await import('./episodes.js')
+    const result = validateStoryboardPayload({
+      scenes: [{
+        id: 'scene-01',
+        visual: '显示流程图',
+        narration: '这里解释核心流程。',
+        minDuration: 8,
+        maxDuration: 3,
+      }],
+    })
+
+    expect(result.error).toContain('maxDuration')
+  })
+
+  it('resets downstream steps after storyboard edits', async () => {
+    const { resetStepsAfter } = await import('./episodes.js')
+    const episode = {
+      steps: {
+        research: 'completed',
+        script: 'completed',
+        narration: 'completed',
+        tts: 'completed',
+        timeline: 'completed',
+        code: 'completed',
+        snapshot: 'completed',
+        render: 'completed',
+        mux: 'completed',
+      },
+    }
+
+    resetStepsAfter(episode, 'narration')
+    expect(episode.steps.script).toBe('completed')
+    expect(episode.steps.narration).toBe('pending')
+    expect(episode.steps.mux).toBe('pending')
+  })
+})

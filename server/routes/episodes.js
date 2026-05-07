@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
-import { readJSON, writeJSON } from '../utils/file-helper.js'
+import { getScriptDir, readJSON, writeJSON, writeText } from '../utils/file-helper.js'
 import { startPipeline, stepOrder } from '../pipeline/orchestrator.js'
 import { readLogs, error } from '../utils/logger.js'
 
@@ -68,6 +68,59 @@ function normalizeEpisode(episode) {
     ...episode,
     steps,
     researchBrief: episode.researchBrief || buildDefaultResearchBrief(episode),
+  }
+}
+
+function storyboardToMarkdown(storyboard) {
+  const scenes = Array.isArray(storyboard) ? storyboard : storyboard?.scenes
+  const lines = ['| Scene | Visual | Narration |', '|---|---|---|']
+  for (const scene of scenes || []) {
+    lines.push(`| ${scene.id} | ${String(scene.visual || '').replace(/\|/g, '/')} | ${String(scene.narration || '').replace(/\|/g, '/')} |`)
+  }
+  return lines.join('\n')
+}
+
+function validateStoryboardPayload(payload) {
+  const scenes = Array.isArray(payload) ? payload : payload?.scenes
+  if (!Array.isArray(scenes) || scenes.length === 0) {
+    return { error: 'scenes must be a non-empty array' }
+  }
+
+  const normalized = []
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i]
+    const id = String(scene.id || `scene-${String(i + 1).padStart(2, '0')}`).trim()
+    const visual = String(scene.visual || '').trim()
+    const narration = String(scene.narration || '').trim()
+    const minDuration = Number(scene.minDuration || 3)
+    const maxDuration = Number(scene.maxDuration || Math.max(minDuration, 8))
+
+    if (!id) return { error: `scene ${i + 1} id is required` }
+    if (!visual) return { error: `${id} visual is required` }
+    if (!narration) return { error: `${id} narration is required` }
+    if (!Number.isFinite(minDuration) || minDuration <= 0) return { error: `${id} minDuration is invalid` }
+    if (!Number.isFinite(maxDuration) || maxDuration < minDuration) return { error: `${id} maxDuration is invalid` }
+
+    normalized.push({
+      id,
+      title: String(scene.title || `镜头 ${i + 1}`).trim(),
+      visual,
+      narration,
+      intent: String(scene.intent || '').trim(),
+      minDuration,
+      maxDuration,
+      animationHint: String(scene.animationHint || '').trim(),
+    })
+  }
+
+  return { storyboard: { version: 1, scenes: normalized } }
+}
+
+function resetStepsAfter(episode, stepName) {
+  const startIdx = stepOrder.indexOf(stepName)
+  if (startIdx === -1) return
+  for (let i = startIdx; i < stepOrder.length; i++) {
+    episode.steps[stepOrder[i]] = 'pending'
   }
 }
 
@@ -143,12 +196,16 @@ router.post('/:slug/generate', async (req, res) => {
     return res.status(409).json({ error: 'research must be completed before generation' })
   }
 
+  const startStep = episode.steps.script === 'completed' && episode.storyboardContent ? 'narration' : 'script'
+
   episode.status = 'running'
   episode.error = null
+  if (startStep === 'narration') resetStepsAfter(episode, 'narration')
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
 
-  startPipeline(episode, 'script').catch((err) => {
+  const options = startStep === 'script' ? { stopAfter: 'script' } : {}
+  startPipeline(episode, startStep, options).catch((err) => {
     error(`Generate failed for ${req.params.slug}: ${err.message}`)
   })
 
@@ -186,6 +243,28 @@ router.put('/:slug/script', (req, res) => {
   if (!episode) return res.status(404).json({ error: 'not found' })
 
   episode.scriptContent = req.body.content
+  episode.updatedAt = new Date().toISOString()
+  writeEpisodes(episodes)
+  res.json(episode)
+})
+
+router.put('/:slug/storyboard', (req, res) => {
+  const { episodes, episode } = findEpisode(req.params.slug)
+  if (!episode) return res.status(404).json({ error: 'not found' })
+
+  const result = validateStoryboardPayload(req.body)
+  if (result.error) return res.status(400).json({ error: result.error })
+
+  const scriptDir = getScriptDir(episode.slug)
+  const markdown = storyboardToMarkdown(result.storyboard)
+  writeText(`${scriptDir}/storyboard.json`, JSON.stringify(result.storyboard, null, 2))
+  writeText(`${scriptDir}/script.md`, markdown)
+
+  episode.storyboardContent = result.storyboard
+  episode.scriptContent = markdown
+  resetStepsAfter(episode, 'narration')
+  episode.status = 'storyboard_ready'
+  episode.error = null
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
   res.json(episode)
@@ -246,3 +325,4 @@ router.post('/:slug/retry', async (req, res) => {
 })
 
 export default router
+export { resetStepsAfter, storyboardToMarkdown, validateStoryboardPayload }

@@ -5,12 +5,14 @@ import VideoPlayer from '../components/VideoPlayer'
 import LogPanel from '../components/LogPanel'
 import ScriptEditor from '../components/ScriptEditor'
 import CodePreview from '../components/CodePreview'
+import StoryboardEditor from '../components/StoryboardEditor'
+import TimelinePreview from '../components/TimelinePreview'
 import { usePipelineStatus } from '../hooks/usePipelineStatus'
 
 const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
 const stepNames = {
   research: '资料收集',
-  script: 'AI 脚本生成',
+  script: '生成分镜',
   narration: '旁白分段提取',
   tts: 'TTS 语音合成',
   timeline: '音频时间轴校准',
@@ -136,6 +138,12 @@ export default function EpisodeDetail() {
     return () => clearInterval(timer)
   }, [displayEpisode, connected, fetchEpisode])
 
+  useEffect(() => {
+    if (displayEpisode?.status !== 'running') {
+      generateStartedRef.current = false
+    }
+  }, [displayEpisode?.status])
+
   if (error && !displayEpisode) {
     return (
       <div className="text-center py-20 text-gray-500">
@@ -165,6 +173,8 @@ export default function EpisodeDetail() {
         ? '失败'
         : displayEpisode.status === 'research_completed'
           ? '资料已完成，等待确认生成'
+          : displayEpisode.status === 'storyboard_ready'
+            ? '分镜已完成，等待确认后续生成'
           : displayEpisode.status === 'brief_pending'
             ? '等待审核资料收集要求'
             : '进行中'
@@ -215,13 +225,13 @@ export default function EpisodeDetail() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-medium text-gray-400 mb-1">资料已完成</h2>
-                  <p className="text-sm text-gray-500">确认下方资料没有偏题后，再进入脚本和分镜生成。</p>
+                  <p className="text-sm text-gray-500">确认下方资料没有偏题后，再生成可编辑分镜。</p>
                 </div>
                 <button
                   onClick={startGenerate}
                   className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                 >
-                  开始生成脚本和视频
+                  确认资料并生成分镜
                 </button>
               </div>
             </section>
@@ -312,26 +322,20 @@ export default function EpisodeDetail() {
       )}
 
       {displayEpisode.storyboardContent && (
-        <section className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-medium text-gray-400 mb-3">分镜 JSON</h2>
-          <pre className="whitespace-pre-wrap text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-4 max-h-96 overflow-auto">
-            {JSON.stringify(displayEpisode.storyboardContent, null, 2)}
-          </pre>
-        </section>
+        <div className="mt-6">
+          <StoryboardEditor
+            storyboard={displayEpisode.storyboardContent}
+            slug={slug}
+            onSaved={(nextEpisode) => setEpisode(nextEpisode)}
+            onContinue={startGenerate}
+          />
+        </div>
       )}
 
       {displayEpisode.timelineContent && (
-        <section className="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-sm font-medium text-gray-400 mb-3">音频校准时间轴</h2>
-          {displayEpisode.timelineWarnings?.length > 0 && (
-            <div className="mb-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-200">
-              {displayEpisode.timelineWarnings.join('；')}
-            </div>
-          )}
-          <pre className="whitespace-pre-wrap text-sm text-gray-300 bg-gray-950 border border-gray-800 rounded-lg p-4 max-h-96 overflow-auto">
-            {JSON.stringify(displayEpisode.timelineContent, null, 2)}
-          </pre>
-        </section>
+        <div className="mt-6">
+          <TimelinePreview timeline={displayEpisode.timelineContent} />
+        </div>
       )}
 
       {displayEpisode.steps?.script === 'completed' && !displayEpisode.storyboardContent && (
