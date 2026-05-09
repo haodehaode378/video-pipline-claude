@@ -191,7 +191,7 @@ Base style constraints:
   }
 }
 
-export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', research = '', timeline = '') {
+export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', research = '', timeline = '', context = '') {
   const style = loadStyleConfig()
   const { colors = {}, fonts = {}, animation = 'minimal', template } = style
   const bg = colors.background || '#1a1a2e'
@@ -203,6 +203,17 @@ export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', re
   const templatePrompt = getTemplatePrompt(getEffectiveTemplate(episodeTemplate, template))
 
   const typeGuides = {
+    plan: `Generate a compact JSON implementation plan for a micro-course HTML video. Output valid JSON only.
+Requirements:
+- Do not use markdown fences.
+- Do not output HTML, CSS, or JavaScript.
+- The plan must guide later code generation and must be concise.
+- Include: visualStyle, sharedClasses, scenes.
+- Each scene must include: id, start, duration, layout, visualElements, animationBeats, requiredClasses.
+- Use semantic class names only. Do not use Tailwind, Bootstrap, or utility framework class names.
+- Do not use any legacy ship/warship visual terms unless the topic is explicitly a ship or aircraft carrier.
+- Choose layouts that match the topic, not a generic repeated placeholder.`,
+
     html: `Generate one complete HTML file for a micro-course video. Output code only, from <!DOCTYPE html> to </html>.
 Requirements:
 - Do not use markdown fences.
@@ -214,6 +225,7 @@ Requirements:
 - Do not rely on JavaScript to create the primary scene DOM.
 - Do not include inline <style>. All styling must live in style.css.
 - Do not use Tailwind, Bootstrap, or utility framework class names. Use semantic classes that style.css defines.
+- Follow the provided Code Plan exactly when choosing layouts, class names, and visual elements.
 - Include title text, explanatory text, geometric visuals, and code blocks.
 - Link same-directory style.css and script.js.
 - Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
@@ -226,6 +238,7 @@ Requirements:
 - Body font: ${bodyFont}. Code font: ${codeFont}.
 - Use CSS @keyframes. Animation intensity: ${animation}.
 - Define all classes used by the HTML.
+- Style the exact HTML provided in Context. Do not invent unrelated major class systems.
 - Do not output Tailwind class names or assume any CSS framework. Use plain CSS.`,
 
     js: `Generate complete JavaScript. Output JS code only.
@@ -251,6 +264,9 @@ ${storyboard}
 
 Final audio-calibrated Timeline JSON:
 ${timeline || 'none'}
+
+Context from previous code generation stages:
+${context || 'none'}
 
 Episode slug:
 ${slug}

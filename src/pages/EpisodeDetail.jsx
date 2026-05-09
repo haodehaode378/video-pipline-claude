@@ -46,6 +46,10 @@ function buildLogs(episode) {
     else logs.push(`  ${stepNames[key]} - 等待`)
   }
   if (episode.error) logs.push(`  错误：${episode.error}`)
+  if (episode.codeFallback?.used) {
+    logs.push(`  降级：代码生成使用本地兜底`)
+    logs.push(`  原因：${episode.codeFallback.reason}`)
+  }
   return logs
 }
 
@@ -163,6 +167,7 @@ export default function EpisodeDetail() {
   const silentVideo = `/videos/${slug}/output/episode-${slug}.mp4`
   const videoReady = displayEpisode.steps?.mux === 'completed'
   const videoSrc = videoReady ? voiceoverVideo : (displayEpisode.steps?.render === 'completed' ? silentVideo : null)
+  const codeFallback = displayEpisode.codeFallback?.used ? displayEpisode.codeFallback : null
 
   const currentStepKey = stepOrder[currentStep - 1]
   const currentStepName = currentStepKey ? stepNames[currentStepKey] : '完成'
@@ -248,6 +253,18 @@ export default function EpisodeDetail() {
             <section className="bg-red-500/10 border border-red-500/30 rounded-xl p-5">
               <h2 className="text-sm font-medium text-red-400 mb-2">错误信息</h2>
               <p className="text-red-300 text-sm">{displayEpisode.error}</p>
+            </section>
+          )}
+
+          {codeFallback && (
+            <section className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5">
+              <h2 className="text-sm font-medium text-yellow-300 mb-2">代码生成降级</h2>
+              <p className="text-yellow-100 text-sm mb-2">
+                AI 生成 HTML/CSS/JS 失败后，系统使用了本地兜底模板继续生成视频。视频可以继续渲染，但画面可能更通用。
+              </p>
+              <p className="text-yellow-200/80 text-xs font-mono break-words">
+                {codeFallback.reason}
+              </p>
             </section>
           )}
 

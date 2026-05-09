@@ -1,8 +1,9 @@
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o'
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''
-const REQUEST_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT_MS || '180000', 10)
+const REQUEST_TIMEOUT_MS = parseInt(process.env.OPENAI_TIMEOUT_MS || '600000', 10)
 const MAX_ATTEMPTS = parseInt(process.env.OPENAI_MAX_ATTEMPTS || '3', 10)
+const STREAM_RESPONSES = process.env.OPENAI_STREAM !== 'false'
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -10,6 +11,72 @@ function sleep(ms) {
 
 function isTransientError(message = '') {
   return /terminated|timeout|aborted|econnreset|socket|network|fetch failed/i.test(message)
+}
+
+function buildRequestBody(systemPrompt, userMessage, maxTokens, temperature, stream) {
+  return {
+    model: OPENAI_MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userMessage },
+    ],
+    max_tokens: maxTokens,
+    temperature,
+    stream,
+  }
+}
+
+function readContentDelta(data) {
+  const choice = data.choices?.[0]
+  return choice?.delta?.content || choice?.message?.content || ''
+}
+
+async function readStreamedText(response) {
+  if (!response.body) return { error: 'Streaming response body is empty' }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let text = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split(/\r?\n/)
+    buffer = lines.pop() || ''
+
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith(':')) continue
+      if (!trimmed.startsWith('data:')) continue
+
+      const payload = trimmed.slice(5).trim()
+      if (payload === '[DONE]') return { text }
+
+      try {
+        const data = JSON.parse(payload)
+        text += readContentDelta(data)
+      } catch (err) {
+        return { error: `Invalid streaming response: ${err.message}` }
+      }
+    }
+  }
+
+  if (buffer.trim()) {
+    const payload = buffer.trim().replace(/^data:\s*/, '')
+    if (payload !== '[DONE]') {
+      try {
+        const data = JSON.parse(payload)
+        text += readContentDelta(data)
+      } catch (err) {
+        return { error: `Invalid streaming response: ${err.message}` }
+      }
+    }
+  }
+
+  return { text }
 }
 
 export async function sendMessage(systemPrompt, userMessage, options = {}) {
@@ -31,15 +98,13 @@ export async function sendMessage(systemPrompt, userMessage, options = {}) {
           'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: OPENAI_MODEL,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userMessage },
-          ],
-          max_tokens: maxTokens,
+        body: JSON.stringify(buildRequestBody(
+          systemPrompt,
+          userMessage,
+          maxTokens,
           temperature,
-        }),
+          STREAM_RESPONSES,
+        )),
       })
 
       if (!response.ok) {
@@ -53,9 +118,11 @@ export async function sendMessage(systemPrompt, userMessage, options = {}) {
         return { error: message }
       }
 
-      const data = await response.json()
-      const choice = data.choices?.[0]
-      const text = choice?.message?.content
+      const result = STREAM_RESPONSES ? await readStreamedText(response) : await response.json()
+      if (result.error) return result
+
+      const choice = result.choices?.[0]
+      const text = STREAM_RESPONSES ? result.text : choice?.message?.content
 
       if (!text) {
         return { error: `No content in response${choice?.finish_reason ? ` (finish_reason: ${choice.finish_reason})` : ''}` }

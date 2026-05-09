@@ -66,6 +66,9 @@ export async function startPipeline(episode, startFrom, options = {}) {
     for (let i = startIdx; i <= stopIdx; i++) {
       ep.steps[stepOrder[i]] = 'pending'
     }
+    if (startIdx <= getStepIndex('code') && stopIdx >= getStepIndex('code')) {
+      ep.codeFallback = null
+    }
   })
 
   if (shouldRun('research', startIdx, stopIdx)) {
@@ -171,6 +174,14 @@ export async function startPipeline(episode, startFrom, options = {}) {
     updateEpisode(slug, (ep) => {
       ep.steps.code = 'completed'
       if (r.codeContent) ep.codeContent = r.codeContent
+      if (r.codePlan) ep.codePlanContent = r.codePlan
+      ep.codeFallback = r.fallback
+        ? {
+            used: true,
+            reason: r.fallbackReason || 'AI code generation failed; local fallback was used.',
+            at: new Date().toISOString(),
+          }
+        : null
     })
   }
 

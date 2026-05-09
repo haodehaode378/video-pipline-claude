@@ -107,6 +107,14 @@ function scenesFromTimeline(timeline) {
   })).filter((scene) => Number.isFinite(scene.start) && Number.isFinite(scene.duration) && scene.duration > 0)
 }
 
+function detectVisualKind(title = '', visual = '') {
+  const text = `${title} ${visual}`
+  if (/大学|学院|学校|校区|高校|招生|学科|专业/.test(text)) return 'campus'
+  if (/手机|K70|Redmi|红米|屏幕|快充|骁龙|电池/.test(text)) return 'device'
+  if (/钢|冶金|材料|高炉|矿|工业|工艺|工厂|炼/.test(text)) return 'industry'
+  return 'concept'
+}
+
 export function generateLocalCodeBundle(episode, script, timeline = null) {
   const timelineScenes = scenesFromTimeline(timeline)
   const parsedScenes = timelineScenes.length ? timelineScenes : parseScriptTable(script)
@@ -124,15 +132,23 @@ export function generateLocalCodeBundle(episode, script, timeline = null) {
   const sceneHtml = fallbackScenes.map((scene, index) => {
     const bullets = keywordList(scene.visual)
     const bulletHtml = bullets.map((item) => `<span>${escapeHtml(item)}</span>`).join('')
+    const visualChipHtml = bullets.slice(0, 3).map((item) => `<span>${escapeHtml(item)}</span>`).join('')
+    const visualKind = detectVisualKind(title, scene.visual)
     return `
       <section class="scene scene-${index % 4}" data-start="${scene.start}" data-duration="${scene.duration}">
         <div class="scene-number">${String(index + 1).padStart(2, '0')}</div>
         <div class="visual-stage">
-          <div class="ship-mark mark-${index % 3}">
-            <div class="deck"></div>
-            <div class="turret turret-a"></div>
-            <div class="turret turret-b"></div>
-            <div class="wake"></div>
+          <div class="topic-visual visual-${visualKind} mark-${index % 3}">
+            <div class="visual-symbol">
+              <div class="symbol-core">${escapeHtml(String(index + 1).padStart(2, '0'))}</div>
+              <div class="symbol-line line-a"></div>
+              <div class="symbol-line line-b"></div>
+              <div class="symbol-line line-c"></div>
+            </div>
+            <div class="core-node"></div>
+            <div class="visual-chip-row">
+              ${visualChipHtml}
+            </div>
           </div>
           <div class="pulse-ring ring-a"></div>
           <div class="pulse-ring ring-b"></div>
@@ -249,54 +265,185 @@ body {
     linear-gradient(135deg, rgba(255,255,255,0.18), transparent 40%);
 }
 
-.ship-mark {
+.topic-visual {
   position: absolute;
-  left: 12%;
-  top: 42%;
-  width: 68%;
-  height: 96px;
+  left: 50%;
+  top: 50%;
+  width: min(72%, 520px);
+  height: 420px;
+  transform: translate(-50%, -50%);
   transform-origin: center;
-  animation: shipDrift 8s ease-in-out infinite;
+  animation: visualDrift 8s ease-in-out infinite;
 }
 
-.deck {
+.visual-symbol {
   position: absolute;
-  inset: 22px 0 0;
+  left: 50%;
+  top: 32px;
+  width: 300px;
+  height: 300px;
+  transform: translateX(-50%);
+  background: #111111;
+  border: 6px solid #f4f1e8;
+  border-radius: 18px;
+  box-shadow: 14px 14px 0 #e03131;
+}
+
+.symbol-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 112px;
+  height: 112px;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  background: #ffd43b;
+  border: 5px solid #111111;
+  color: #111111;
+  font-size: 42px;
+  font-weight: 900;
+}
+
+.symbol-line {
+  position: absolute;
   background: #f4f1e8;
-  border: 4px solid #111111;
-  clip-path: polygon(0 50%, 12% 0, 82% 0, 100% 50%, 82% 100%, 12% 100%);
+  border: 3px solid #111111;
 }
 
-.turret {
-  position: absolute;
-  top: 0;
-  width: 96px;
-  height: 52px;
-  background: #e03131;
-  border: 4px solid #111111;
+.line-a {
+  left: 26px;
+  right: 26px;
+  top: 52px;
+  height: 18px;
 }
 
-.turret::after {
+.line-b {
+  left: 42px;
+  right: 42px;
+  bottom: 52px;
+  height: 18px;
+}
+
+.line-c {
+  left: 50%;
+  top: 40px;
+  bottom: 40px;
+  width: 18px;
+  transform: translateX(-50%);
+}
+
+.visual-device .visual-symbol {
+  width: 210px;
+  height: 330px;
+  border-radius: 32px;
+}
+
+.visual-device .visual-symbol::before {
   content: "";
   position: absolute;
-  right: -86px;
-  top: 18px;
-  width: 92px;
-  height: 12px;
-  background: #111111;
+  top: 10px;
+  left: 50%;
+  width: 58px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: #f4f1e8;
 }
 
-.turret-a { left: 28%; }
-.turret-b { left: 52%; }
+.visual-device .symbol-core {
+  inset: 48px 20px 28px;
+  width: auto;
+  height: auto;
+  transform: none;
+  left: 20px;
+  top: 48px;
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(224,49,49,0.45), transparent 42%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0.12) 0 2px, transparent 2px 22px),
+    #19334d;
+  color: #f4f1e8;
+}
 
-.wake {
+.visual-campus .visual-symbol {
+  border-radius: 0;
+  clip-path: polygon(50% 0, 100% 24%, 100% 100%, 0 100%, 0 24%);
+}
+
+.visual-campus .symbol-core {
+  top: 62%;
+}
+
+.visual-campus .line-a,
+.visual-campus .line-b {
+  left: 34px;
+  right: 34px;
+}
+
+.visual-industry .visual-symbol {
+  border-radius: 8px;
+  transform: translateX(-50%) skewX(-6deg);
+}
+
+.visual-industry .symbol-core {
+  border-radius: 50%;
+  background: #e03131;
+  color: #f4f1e8;
+}
+
+.visual-industry .line-a,
+.visual-industry .line-b,
+.visual-industry .line-c {
+  background: #ffd43b;
+}
+
+.core-node {
   position: absolute;
-  left: -80px;
-  top: 62px;
-  width: 120px;
-  height: 18px;
+  right: 24px;
+  top: 86px;
+  width: 110px;
+  height: 110px;
+  background: #ffd43b;
+  border: 4px solid #111111;
+  box-shadow: 10px 10px 0 #111111;
+  animation: nodePulse 2.4s ease-in-out infinite;
+}
+
+.core-node::before,
+.core-node::after {
+  content: "";
+  position: absolute;
+  inset: 20px;
+  border: 4px solid #111111;
+}
+
+.core-node::after {
+  inset: -18px;
+  border-color: #f4f1e8;
+  opacity: 0.45;
+}
+
+.visual-chip-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.visual-chip-row span {
+  max-width: 180px;
+  padding: 8px 10px;
+  border: 3px solid #111111;
   background: #f4f1e8;
-  box-shadow: -44px 28px 0 #f4f1e8, -92px -24px 0 #f4f1e8;
+  color: #111111;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
 }
 
 .pulse-ring {
@@ -372,9 +519,14 @@ h2 {
 .scene-2 .visual-stage { background: #264653; }
 .scene-3 .visual-stage { background: #3a0ca3; }
 
-@keyframes shipDrift {
-  0%, 100% { transform: translateY(0) rotate(-2deg); }
-  50% { transform: translateY(18px) rotate(4deg); }
+@keyframes visualDrift {
+  0%, 100% { transform: translate(-50%, -50%) rotate(-2deg); }
+  50% { transform: translate(-50%, calc(-50% + 18px)) rotate(3deg); }
+}
+
+@keyframes nodePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
 }
 
 @keyframes blast {

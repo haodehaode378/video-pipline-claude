@@ -64,10 +64,23 @@ function normalizeEpisode(episode) {
   if (!episode.steps?.timeline && episode.steps?.mux === 'completed') {
     steps.timeline = 'completed'
   }
+  const legacyFallbackDetected =
+    !episode.codeFallback
+    && episode.steps?.code === 'completed'
+    && typeof episode.codeContent?.html === 'string'
+    && /\bship-mark\b/.test(episode.codeContent.html)
+
   return {
     ...episode,
     steps,
     researchBrief: episode.researchBrief || buildDefaultResearchBrief(episode),
+    codeFallback: legacyFallbackDetected
+      ? {
+          used: true,
+          reason: '历史记录未保存具体降级原因；该代码内容匹配本地兜底模板。',
+          at: episode.updatedAt || null,
+        }
+      : episode.codeFallback,
   }
 }
 
@@ -179,6 +192,7 @@ router.post('/:slug/research', async (req, res) => {
   episode.status = 'running'
   episode.error = null
   episode.steps.research = 'pending'
+  episode.codeFallback = null
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
 
@@ -200,6 +214,7 @@ router.post('/:slug/generate', async (req, res) => {
 
   episode.status = 'running'
   episode.error = null
+  if (startStep === 'script') episode.codeFallback = null
   if (startStep === 'narration') resetStepsAfter(episode, 'narration')
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
@@ -314,6 +329,9 @@ router.post('/:slug/retry', async (req, res) => {
   episode.steps[step] = 'pending'
   episode.status = 'running'
   episode.error = null
+  if (stepOrder.indexOf(step) <= stepOrder.indexOf('code')) {
+    episode.codeFallback = null
+  }
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
 

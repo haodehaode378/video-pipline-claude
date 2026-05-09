@@ -140,6 +140,23 @@ describe('buildCodePrompt', () => {
     expect(result.user).toContain('Puppeteer')
   })
 
+  it('plan prompt asks for JSON implementation plan', async () => {
+    writeStyleConfig({ colors: {}, fonts: {}, animation: 'minimal' })
+    const { buildCodePrompt } = await import('./prompts.js')
+    const result = buildCodePrompt('plan', 'storyboard', 'test')
+    expect(result.user).toContain('valid JSON only')
+    expect(result.user).toContain('visualStyle')
+    expect(result.user).toContain('sharedClasses')
+    expect(result.user).toContain('legacy ship')
+  })
+
+  it('injects previous stage context into code prompt', async () => {
+    writeStyleConfig({ colors: {}, fonts: {}, animation: 'minimal' })
+    const { buildCodePrompt } = await import('./prompts.js')
+    const result = buildCodePrompt('css', 'storyboard', 'test', '', '', '', 'Approved HTML: <section></section>')
+    expect(result.user).toContain('Approved HTML')
+  })
+
   it('injects slug into prompt', async () => {
     writeStyleConfig({ colors: {}, fonts: {}, animation: 'minimal' })
     const { buildCodePrompt } = await import('./prompts.js')
