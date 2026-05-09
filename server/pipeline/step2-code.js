@@ -3,7 +3,7 @@ import { buildCodePrompt } from '../ai/prompts.js'
 import { writeText, getEpisodeDir, readText } from '../utils/file-helper.js'
 import styleCheck from '../utils/style-check.js'
 import { generateLocalCodeBundle } from '../utils/local-codegen.js'
-import { warn } from '../utils/logger.js'
+import { info, warn } from '../utils/logger.js'
 
 function stripCodeFence(text, type) {
   if (!text) return ''
@@ -47,7 +47,8 @@ function validatePlan(code) {
 
 function validateGenerated(type, code) {
   const errors = []
-  if (!code || code.length < 200) errors.push('output is too short')
+  const minLength = type === 'html-scene' ? 80 : 200
+  if (!code || code.length < minLength) errors.push('output is too short')
   if (code.includes('```')) errors.push('contains markdown code fence')
 
   if (type === 'plan') {
@@ -63,6 +64,19 @@ function validateGenerated(type, code) {
     if (!/<section[^>]+data-duration=/i.test(code)) errors.push('missing section[data-duration]')
     if (!/script\.js/i.test(code)) errors.push('missing script.js reference')
     if (!/style\.css/i.test(code)) errors.push('missing style.css reference')
+  }
+
+  if (type === 'html-scene') {
+    if (/<!doctype html>|<html\b|<head\b|<body\b|<script\b|<link\b/i.test(code)) {
+      errors.push('scene HTML must not include document wrapper, links, or scripts')
+    }
+    if (!/<section[^>]+class=["'][^"']*scene/i.test(code)) errors.push('missing section.scene element')
+    if (!/<section[^>]+data-start=/i.test(code)) errors.push('missing section[data-start]')
+    if (!/<section[^>]+data-duration=/i.test(code)) errors.push('missing section[data-duration]')
+    if (/<style\b/i.test(code)) errors.push('scene HTML must not include inline <style>')
+    if (/\b(md:|lg:|xl:|sm:|flex-col|items-center|justify-center|h-full|text-center|rounded-lg)\b/.test(code)) {
+      errors.push('Tailwind-style utility classes are not allowed in generated scene HTML')
+    }
   }
 
   if (type === 'css') {
@@ -138,19 +152,25 @@ async function generatePart(type, storyboard, slug, template, research, timeline
   return sendMessage(system, prompt, { maxTokens })
 }
 
-async function generateValidatedPart(type, storyboard, slug, template, research, timeline, context = '', maxTokens = 12000) {
+async function generateValidatedPart(type, storyboard, slug, template, research, timeline, context = '', maxTokens = 12000, label = type) {
   let retryNote = ''
   let lastErrors = []
 
   for (let attempt = 0; attempt < 3; attempt++) {
+    info(`[Step2] Generating ${label} attempt ${attempt + 1}/3...`)
     const result = await generatePart(type, storyboard, slug, template, research, timeline, context, retryNote, maxTokens)
-    if (result.error) return { error: result.error }
+    if (result.error) {
+      info(`[Step2] ${label} attempt ${attempt + 1}/3 failed: ${result.error}`)
+      return { error: result.error }
+    }
 
     const code = stripCodeFence(result.text, type)
     lastErrors = validateGenerated(type, code)
     if (lastErrors.length === 0) {
+      info(`[Step2] ${label} attempt ${attempt + 1}/3 succeeded`)
       return { text: code }
     }
+    info(`[Step2] ${label} attempt ${attempt + 1}/3 failed validation: ${lastErrors.join('; ')}`)
 
     retryNote = [
       `Previous ${type} output was invalid: ${lastErrors.join('; ')}.`,
@@ -158,6 +178,7 @@ async function generateValidatedPart(type, storyboard, slug, template, research,
       'Do not use markdown fences.',
       type === 'plan' ? 'Return valid JSON only with visualStyle, sharedClasses, and scenes.' : '',
       type === 'html' ? 'HTML must contain real <section class="scene" data-start="..."> elements inside #root.' : '',
+      type === 'html-scene' ? 'Return exactly one valid <section class="scene ..."> element only.' : '',
       type === 'js' ? 'JavaScript must be syntactically complete and expose window.__hfSeek(seconds).' : '',
     ].filter(Boolean).join('\n')
   }
@@ -197,6 +218,113 @@ function writeCodeBundle(dir, bundle) {
   writeText(`${dir}/index.html`, bundle.html)
   writeText(`${dir}/style.css`, bundle.css)
   writeText(`${dir}/script.js`, bundle.js)
+}
+
+function elapsed(startedAt) {
+  return `${((Date.now() - startedAt) / 1000).toFixed(1)}s`
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function getTimelineScenes(timelineData) {
+  return Array.isArray(timelineData?.scenes) ? timelineData.scenes : []
+}
+
+function findSceneById(collection, id) {
+  return Array.isArray(collection) ? collection.find((scene) => scene.id === id) : null
+}
+
+function pendingSceneSection(scene) {
+  const start = Number(scene.start) || 0
+  const duration = Number(scene.duration) || Math.max(0, Number(scene.end) - start) || 1
+  return `<section class="scene scene-pending" data-start="${start}" data-duration="${duration}">
+  <div class="scene-shell">
+    <p class="scene-kicker">Generating scene</p>
+    <h1>${escapeHtml(scene.title || scene.id || 'Scene')}</h1>
+  </div>
+</section>`
+}
+
+function assembleHtmlDocument(episode, timelineData, sceneSections) {
+  const timelineScenes = getTimelineScenes(timelineData)
+  const duration = Number(timelineData?.totalDuration) || timelineScenes.reduce((max, scene) => Math.max(max, Number(scene.end) || 0), 0)
+  const sections = timelineScenes.map((scene, index) => sceneSections[index] || pendingSceneSection(scene)).join('\n\n')
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(episode.title)}</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="root" data-duration="${duration}">
+${sections}
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
+`
+}
+
+async function generateSceneHtmlSections(episode, storyboardData, timelineData, research, planResult, dir, startedAt) {
+  const timelineScenes = getTimelineScenes(timelineData)
+  if (timelineScenes.length === 0) return { error: 'Timeline has no scenes' }
+
+  const plan = parsePlanJSON(planResult.text)
+  const storyboardScenes = Array.isArray(storyboardData?.scenes) ? storyboardData.scenes : []
+  const planScenes = Array.isArray(plan?.scenes) ? plan.scenes : []
+  const sections = []
+
+  writeText(`${dir}/index.html`, assembleHtmlDocument(episode, timelineData, sections))
+
+  for (let index = 0; index < timelineScenes.length; index++) {
+    const timelineScene = timelineScenes[index]
+    const storyboardScene = findSceneById(storyboardScenes, timelineScene.id) || storyboardScenes[index] || {}
+    const planScene = findSceneById(planScenes, timelineScene.id) || planScenes[index] || {}
+    const label = `HTML scene ${index + 1}/${timelineScenes.length} (${timelineScene.id || `scene-${index + 1}`})`
+    const sceneStoryboard = JSON.stringify({ scene: storyboardScene }, null, 2)
+    const sceneTimeline = JSON.stringify({
+      totalDuration: timelineData.totalDuration,
+      scene: timelineScene,
+    }, null, 2)
+    const context = [
+      `Code Plan visual style:\n${plan.visualStyle || 'none'}`,
+      `Shared classes:\n${JSON.stringify(plan.sharedClasses || [], null, 2)}`,
+      `Matching Code Plan scene:\n${JSON.stringify(planScene, null, 2)}`,
+      `Already generated scene count: ${sections.length}`,
+      'Return only the current scene section.',
+    ].join('\n\n')
+
+    const result = await generateValidatedPart(
+      'html-scene',
+      sceneStoryboard,
+      episode.slug,
+      episode.template,
+      research,
+      sceneTimeline,
+      context,
+      4500,
+      label,
+    )
+    if (result.error) return { error: `${label}: ${result.error}` }
+
+    sections[index] = result.text
+    writeText(`${dir}/index.html`, assembleHtmlDocument(episode, timelineData, sections))
+    info(`[Step2] Wrote partial index.html after ${label} for "${episode.title}" (${episode.slug}) at ${elapsed(startedAt)}`)
+  }
+
+  const html = assembleHtmlDocument(episode, timelineData, sections)
+  const htmlErrors = validateGenerated('html', html)
+  if (htmlErrors.length) return { error: htmlErrors.join('; ') }
+  return { text: html }
 }
 
 function buildTimelineControllerJS(timelineData) {
@@ -247,6 +375,7 @@ function tryRecoveredBundle(html, css, timelineData) {
 }
 
 export const step2CodeInternals = {
+  assembleHtmlDocument,
   buildTimelineControllerJS,
   validateGenerated,
   validateCodeBundle,
@@ -285,7 +414,8 @@ function fallbackResult(episode, storyboard, timeline, dir, reason) {
 }
 
 export async function runStep2(episode) {
-  console.log(`[Step2] Generating code for "${episode.title}"...`)
+  const startedAt = Date.now()
+  info(`[Step2] Generating code for "${episode.title}" (${episode.slug})...`)
 
   const storyboardPath = `scripts/${episode.slug}/storyboard.json`
   const timelinePath = `${getEpisodeDir(episode.slug)}/timeline.json`
@@ -310,20 +440,27 @@ export async function runStep2(episode) {
   const storyboard = JSON.stringify(storyboardData, null, 2)
   const timeline = JSON.stringify(timelineData, null, 2)
 
-  const planResult = await generateValidatedPart('plan', storyboard, slug, episode.template, research, timeline, '', 7000)
+  info(`[Step2] Generating code plan for "${episode.title}" (${episode.slug})...`)
+  const planResult = await generateValidatedPart('plan', storyboard, slug, episode.template, research, timeline, '', 7000, 'code plan')
   if (planResult.error) return fallbackResult(episode, storyboard, timeline, dir, `Code plan: ${planResult.error}`)
   writeText(`${dir}/code-plan.json`, planResult.text)
+  info(`[Step2] Code plan generated for "${episode.title}" (${episode.slug}) after ${elapsed(startedAt)}`)
 
   const planContext = `Code Plan JSON:\n${planResult.text}`
 
-  const htmlResult = await generateValidatedPart('html', storyboard, slug, episode.template, research, timeline, planContext)
+  info(`[Step2] Generating HTML by scene for "${episode.title}" (${episode.slug})...`)
+  const htmlResult = await generateSceneHtmlSections(episode, storyboardData, timelineData, research, planResult, dir, startedAt)
   if (htmlResult.error) return fallbackResult(episode, storyboard, timeline, dir, `HTML: ${htmlResult.error}`)
+  info(`[Step2] HTML generated for "${episode.title}" (${episode.slug}) after ${elapsed(startedAt)}`)
 
   const htmlContext = `${planContext}\n\nApproved HTML:\n${htmlResult.text}`
 
+  info(`[Step2] Generating CSS for "${episode.title}" (${episode.slug})...`)
   const cssResult = await generateCSSWithStyleCheck('css', storyboard, slug, episode.template, research, timeline, htmlContext)
   if (cssResult.error) return fallbackResult(episode, storyboard, timeline, dir, `CSS: ${cssResult.error}`)
+  info(`[Step2] CSS generated for "${episode.title}" (${episode.slug}) after ${elapsed(startedAt)}`)
 
+  info(`[Step2] Building deterministic timeline controller for "${episode.title}" (${episode.slug})...`)
   const jsResult = tryRecoveredBundle(htmlResult.text, cssResult.text, timelineData)
   if (jsResult.error) return fallbackResult(episode, storyboard, timeline, dir, `Deterministic JS: ${jsResult.error}`)
 
@@ -333,7 +470,7 @@ export async function runStep2(episode) {
   }
 
   writeCodeBundle(dir, { html: htmlResult.text, css: cssResult.text, js: jsResult.js })
-  console.log('[Step2] HTML/CSS/JS all generated')
+  info(`[Step2] HTML/CSS/JS all generated for "${episode.title}" (${episode.slug}) after ${elapsed(startedAt)}`)
 
   return {
     success: true,

@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { step2CodeInternals } from './step2-code.js'
 
-const { buildTimelineControllerJS, validateGenerated, validateCodeBundle, tryRecoveredBundle } = step2CodeInternals
+const {
+  assembleHtmlDocument,
+  buildTimelineControllerJS,
+  validateGenerated,
+  validateCodeBundle,
+  tryRecoveredBundle,
+} = step2CodeInternals
 
 function validHtml() {
   return `<!DOCTYPE html>
@@ -22,6 +28,43 @@ function validHtml() {
 }
 
 describe('step2 deterministic timeline controller', () => {
+  it('validates one scene section without requiring a full document', () => {
+    const section = `<section class="scene atom-scene" data-start="0" data-duration="4">
+  <div class="scene-shell">
+    <h1>Atom test</h1>
+    <p>One focused timed scene with visible content.</p>
+  </div>
+</section>`
+
+    expect(validateGenerated('html-scene', section)).toEqual([])
+    expect(validateGenerated('html-scene', `<!DOCTYPE html>${section}`)).toContain(
+      'scene HTML must not include document wrapper, links, or scripts',
+    )
+  })
+
+  it('assembles a progressive index.html with pending scene placeholders', () => {
+    const html = assembleHtmlDocument(
+      { title: 'Progressive HTML' },
+      {
+        totalDuration: 8,
+        scenes: [
+          { id: 'scene-01', title: 'Ready', start: 0, duration: 4 },
+          { id: 'scene-02', title: 'Pending', start: 4, duration: 4 },
+        ],
+      },
+      [
+        `<section class="scene ready-scene" data-start="0" data-duration="4">
+  <h1>Ready</h1>
+</section>`,
+      ],
+    )
+
+    expect(validateGenerated('html', html)).toEqual([])
+    expect(html).toContain('ready-scene')
+    expect(html).toContain('scene-pending')
+    expect(html).toContain('data-start="4"')
+  })
+
   it('builds valid JS without creating primary scene DOM', () => {
     const js = buildTimelineControllerJS({
       scenes: [

@@ -230,6 +230,19 @@ Requirements:
 - Link same-directory style.css and script.js.
 - Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
 
+    'html-scene': `Generate exactly one HTML section for one timed micro-course video scene. Output the <section> element only.
+Requirements:
+- Do not use markdown fences.
+- Do not output <!DOCTYPE html>, <html>, <head>, <body>, <link>, or <script>.
+- The root tag must be one real <section class="scene ..."> element.
+- The section must include data-start and data-duration exactly matching the provided Timeline scene.
+- Do not include inline <style>. All styling must live in style.css.
+- Do not use Tailwind, Bootstrap, or utility framework class names. Use semantic classes only.
+- Do not rely on JavaScript to create visible content.
+- Include scene title text, explanatory text, geometric visuals, and code/scientific labels when relevant.
+- Follow the matching Code Plan scene and the provided Storyboard scene.
+- Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
+
     css: `Generate complete CSS. Output CSS code only.
 Requirements:
 - Do not use markdown fences.
