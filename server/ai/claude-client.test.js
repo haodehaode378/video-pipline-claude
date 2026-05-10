@@ -163,6 +163,50 @@ describe('sendMessage empty content diagnostics', () => {
     )
   })
 
+  it('fallbacks when an API says response_format is unavailable', async () => {
+    process.env.OPENAI_API_KEY = 'test-key'
+    process.env.OPENAI_STREAM = 'false'
+    vi.resetModules()
+
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () => '{"error":{"message":"This response_format type is unavailable now"}}',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{
+            finish_reason: 'stop',
+            message: {
+              role: 'assistant',
+              content: '{"ok":true}',
+            },
+          }],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { sendMessage } = await import('./claude-client.js')
+    const result = await sendMessage('system', 'user', {
+      responseFormat: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'test_schema',
+          strict: true,
+          schema: { type: 'object' },
+        },
+      },
+    })
+
+    expect(result.text).toBe('{"ok":true}')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).response_format).toBeUndefined()
+  })
+
   it('does not fallback for unrelated client errors', async () => {
     process.env.OPENAI_API_KEY = 'test-key'
     process.env.OPENAI_STREAM = 'false'

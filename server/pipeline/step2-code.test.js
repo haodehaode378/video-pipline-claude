@@ -212,6 +212,36 @@ window.__hfSeek = function() {};
     expect(validateGenerated('html-scene', normalized)).toEqual([])
   })
 
+  it('normalizes fused semantic and viz class names from AI HTML', () => {
+    const fused = '<section class="scenescene-02" data-start="4" data-duration="4"><div class="scene-shellviz-shell"><div class="visual-panelviz-panel"><span class="labelviz-tag">Test text</span></div></div></section>'
+    const normalized = normalizeHtmlAttrs(fused)
+
+    expect(normalized).toContain('class="scene scene-02"')
+    expect(normalized).toContain('class="scene-shell viz-shell"')
+    expect(normalized).toContain('class="visual-panel viz-panel"')
+    expect(normalized).toContain('class="label viz-tag"')
+    expect(validateGenerated('html-scene', normalized)).toEqual([])
+  })
+
+  it('rejects scene HTML with an unterminated tag or attribute', () => {
+    const truncated = '<section class="scene" data-start="0" data-duration="4"><div class="visual-panel"><div class="viz-m'
+
+    expect(validateGenerated('html-scene', truncated)).toContain(
+      'scene HTML contains malformed or unterminated tags',
+    )
+  })
+
+  it('rejects assembled HTML when an attribute swallows the next scene tag', () => {
+    const malformed = validHtml().replace(
+      '<section class="scene scene-one" data-start="0" data-duration="4"></section>',
+      '<section class="scene" data-start="0" data-duration="4"><div class="viz-m <section class="scene scene-one" data-start="0" data-duration="4"></section>',
+    )
+
+    expect(validateCodeBundle(malformed, '.scene { display: block; }', buildTimelineControllerJS({ scenes: [] }))).toContain(
+      'HTML contains malformed or unterminated tags',
+    )
+  })
+
   it('leaves already-valid HTML unchanged', () => {
     const valid = '<section class="scene" data-start="0" data-duration="4"><h1>OK</h1></section>'
     expect(normalizeHtmlAttrs(valid)).toBe(valid)

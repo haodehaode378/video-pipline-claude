@@ -91,6 +91,26 @@ function normalizeHtmlAttrs(html) {
     .replace(/(["'])(data-duration=)/gi, '$1 $2')
     .replace(/(["'])(id=)/gi, '$1 $2')
     .replace(/(["'])(style=)/gi, '$1 $2')
+    .replace(/\bclass=(["'])([^"']*)\1/gi, (match, quote, value) => {
+      const normalized = value
+        .replace(/\b(scene)(?=(?:scene-|viz-|local|pending))/g, '$1 ')
+        .replace(/\b(scene-shell)(?=viz-)/g, '$1 ')
+        .replace(/\b(scene-kicker)(?=viz-)/g, '$1 ')
+        .replace(/\b(scene-title)(?=viz-)/g, '$1 ')
+        .replace(/\b(scene-summary)(?=viz-)/g, '$1 ')
+        .replace(/\b(visual-panel)(?=viz-)/g, '$1 ')
+        .replace(/\b(panel)(?=viz-)/g, '$1 ')
+        .replace(/\b(card)(?=viz-)/g, '$1 ')
+        .replace(/\b(metric)(?=viz-)/g, '$1 ')
+        .replace(/\b(diagram)(?=viz-)/g, '$1 ')
+        .replace(/\b(badge)(?=viz-)/g, '$1 ')
+        .replace(/\b(label)(?=viz-)/g, '$1 ')
+        .replace(/\b(connector)(?=viz-)/g, '$1 ')
+        .replace(/\b(node)(?=viz-)/g, '$1 ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      return `class=${quote}${normalized}${quote}`
+    })
   return out
 }
 
@@ -112,6 +132,11 @@ function braceBalance(text) {
     if (balance < 0) return false
   }
   return balance === 0
+}
+
+function hasMalformedHtmlTag(html) {
+  if (/<[^>]*$/i.test(html)) return true
+  return /<[^>]+\b(?:class|id|style|data-start|data-duration)=(["'])[^"'>]*<[^"'>]*\1/i.test(html)
 }
 
 function parsePlanJSON(text) {
@@ -219,6 +244,7 @@ function validateGenerated(type, code) {
   }
 
   if (type === 'html') {
+    if (hasMalformedHtmlTag(code)) errors.push('HTML contains malformed or unterminated tags')
     if (!/<!doctype html>/i.test(code)) errors.push('missing <!DOCTYPE html>')
     if (!/<\/html>/i.test(code)) errors.push('missing </html>')
     if (!/<div[^>]+id=["']root["'][^>]*data-duration=/i.test(code)) errors.push('missing #root[data-duration]')
@@ -230,6 +256,7 @@ function validateGenerated(type, code) {
   }
 
   if (type === 'html-scene') {
+    if (hasMalformedHtmlTag(code)) errors.push('scene HTML contains malformed or unterminated tags')
     if (/<!doctype html>|<html\b|<head\b|<body\b|<script\b|<link\b/i.test(code)) {
       errors.push('scene HTML must not include document wrapper, links, or scripts')
     }
@@ -278,6 +305,7 @@ function validateCodeBundle(html, css, js) {
 
   if (sceneMatches.length < 3) errors.push('expected at least 3 timed scenes')
   if (/<style\b/i.test(html)) errors.push('HTML must not include inline <style>; use style.css')
+  if (hasMalformedHtmlTag(html)) errors.push('HTML contains malformed or unterminated tags')
   if (/\b(innerHTML|insertAdjacentHTML|createElement|appendChild)\b/.test(js)) {
     errors.push('JS must not create or replace primary scene DOM')
   }

@@ -21,7 +21,7 @@ function isResponseFormatUnsupported(status, message = '') {
   const text = String(message).toLowerCase()
   const mentionsStructuredFormat = /response_format|json_schema|schema|strict/.test(text)
   const mentionsUnsupportedParam =
-    /unsupported|unknown parameter|invalid parameter|unrecognized|not supported|extra inputs are not permitted/.test(text)
+    /unsupported|unknown parameter|invalid parameter|unrecognized|not supported|unavailable|extra inputs are not permitted/.test(text)
   return mentionsStructuredFormat && mentionsUnsupportedParam
 }
 
