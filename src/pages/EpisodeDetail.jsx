@@ -122,6 +122,27 @@ export default function EpisodeDetail() {
     }
   }, [fetchEpisode, researchBrief, slug])
 
+  const retryFromStep = useCallback(async (step) => {
+    setActionLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '重试启动失败')
+      }
+      fetchEpisode()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setActionLoading(false)
+    }
+  }, [fetchEpisode, slug])
+
   useEffect(() => {
     const timer = setTimeout(fetchEpisode, 0)
     return () => clearTimeout(timer)
@@ -270,7 +291,16 @@ export default function EpisodeDetail() {
 
           {codeFallback && (
             <section className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5">
-              <h2 className="text-sm font-medium text-yellow-300 mb-2">代码生成降级</h2>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                <h2 className="text-sm font-medium text-yellow-300">代码生成降级</h2>
+                <button
+                  onClick={() => retryFromStep('code')}
+                  disabled={actionLoading || displayEpisode.status === 'running'}
+                  className="shrink-0 bg-yellow-400/15 border border-yellow-400/40 hover:bg-yellow-400/25 disabled:opacity-50 text-yellow-100 px-3 py-1.5 rounded-lg text-xs transition-colors"
+                >
+                  {actionLoading ? '启动中...' : '重新生成代码和视频'}
+                </button>
+              </div>
               <p className="text-yellow-100 text-sm mb-2">
                 AI 生成 HTML/CSS/JS 失败后，系统使用了本地兜底模板继续生成视频。视频可以继续渲染，但画面可能更通用。
               </p>
@@ -284,13 +314,7 @@ export default function EpisodeDetail() {
             <div className="space-y-3">
               <div className="flex gap-3 flex-wrap">
                 <button
-                  onClick={() => {
-                    fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ step: 'research' }),
-                    }).then(() => fetchEpisode())
-                  }}
+                  onClick={() => retryFromStep('research')}
                   className="bg-tech-600 hover:bg-tech-500 text-white px-4 py-2 rounded-lg text-sm transition-colors"
                 >
                   从资料收集重试
@@ -302,13 +326,7 @@ export default function EpisodeDetail() {
                   return (
                     <button
                       key={key}
-                      onClick={() => {
-                        fetch(`/api/episodes/${encodeURIComponent(slug)}/retry`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ step: key }),
-                        }).then(() => fetchEpisode())
-                      }}
+                      onClick={() => retryFromStep(key)}
                       className="bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-300 px-3 py-1.5 rounded-lg text-xs transition-colors"
                     >
                       重试：{stepNames[key]}
