@@ -7,6 +7,7 @@ import ScriptEditor from '../components/ScriptEditor'
 import CodePreview from '../components/CodePreview'
 import StoryboardEditor from '../components/StoryboardEditor'
 import TimelinePreview from '../components/TimelinePreview'
+import AIAssistantPanel from '../components/AIAssistantPanel'
 import { usePipelineStatus } from '../hooks/usePipelineStatus'
 
 const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
@@ -171,6 +172,17 @@ export default function EpisodeDetail() {
 
   const currentStepKey = stepOrder[currentStep - 1]
   const currentStepName = currentStepKey ? stepNames[currentStepKey] : '完成'
+  const assistantContext = {
+    page: 'episode-detail',
+    slug,
+    title: displayEpisode.title,
+    status: displayEpisode.status,
+    currentStep: currentStepKey || 'done',
+    researchBrief,
+    researchContent: displayEpisode.researchContent || '',
+    storyboardContent: displayEpisode.storyboardContent || null,
+    scriptContent: displayEpisode.scriptContent || '',
+  }
   const statusText =
     displayEpisode.status === 'completed'
       ? '已完成'
@@ -310,6 +322,13 @@ export default function EpisodeDetail() {
 
         <aside className="space-y-4">
           <VideoPlayer src={videoSrc} />
+          <AIAssistantPanel
+            storageKey={`ai-assistant:episode:${slug}`}
+            title="剧集创作助手"
+            contextLabel="资料、分镜和当前进度"
+            context={assistantContext}
+            initiallyOpen={false}
+          />
           {videoReady ? (
             <a
               href={`/api/episodes/${encodeURIComponent(slug)}/download`}

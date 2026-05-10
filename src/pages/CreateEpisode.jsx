@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import AIAssistantPanel from '../components/AIAssistantPanel'
 
 const MODE_SINGLE = 'single'
 const MODE_BATCH = 'batch'
@@ -91,10 +92,23 @@ export default function CreateEpisode() {
     setLoading(false)
   }
 
+  const assistantContext = {
+    page: 'create-episode',
+    mode,
+    topic,
+    keywords,
+    sourceMaterial,
+    duration,
+    template,
+    batchTopics,
+  }
+
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-7xl">
       <h1 className="text-2xl font-semibold mb-6">新建剧集</h1>
 
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
+        <div className="max-w-3xl">
       <div className="flex gap-1 mb-6 bg-gray-900 rounded-lg p-1 w-fit">
         <button
           onClick={() => setMode(MODE_SINGLE)}
@@ -226,6 +240,17 @@ export default function CreateEpisode() {
             )}
           </div>
         )}
+      </div>
+        </div>
+
+        <aside className="xl:sticky xl:top-6">
+          <AIAssistantPanel
+            storageKey="ai-assistant:create-episode"
+            title="新建剧集助手"
+            contextLabel="选题、关键词、素材和时长"
+            context={assistantContext}
+          />
+        </aside>
       </div>
     </div>
   )

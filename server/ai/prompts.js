@@ -138,7 +138,8 @@ export function buildScriptPrompt(topic, keywords, duration, sourceMaterial, res
     system: [
       'You are a micro-course video script writer.',
       'Generate an accurate, concise, animation-friendly storyboard.',
-      'Only output valid JSON. Do not use markdown fences.',
+      'Only output compact valid JSON. Do not use markdown fences.',
+      'Do not output hidden reasoning, chain-of-thought, analysis, or <think> tags.',
     ].join(' '),
     user: `Topic:
 ${topic}
@@ -173,14 +174,17 @@ Output format:
 }
 
 Rules:
-- Return 5-8 scenes for the whole video.
-- Visual descriptions must include layout, color, elements, animation, code blocks when relevant, and pacing.
-- Narration must be natural spoken Chinese, 1-3 short sentences per scene.
+- Return exactly 6 scenes for the whole video.
+- Keep every string short. title <= 16 Chinese chars, visual <= 80 Chinese chars, narration <= 55 Chinese chars, intent <= 40 Chinese chars, animationHint <= 50 Chinese chars.
+- Visual descriptions must include layout, key elements, and motion, but no long prose.
+- Narration must be natural spoken Chinese, 1-2 short sentences per scene.
 - minDuration and maxDuration are initial pacing hints only; final timing will be based on real TTS audio duration.
 - maxDuration must be greater than or equal to minDuration.
 - Facts must come from Research or user material. Do not fabricate facts.
 - Use Chinese for title, visual, narration, intent, and animationHint.
 - Use this story arc: title hook, concept explanation, mechanism/demo, key-step explanation, summary.
+- Output JSON must close completely. Do not add explanations before or after JSON.
+- Do not include <think> tags or reasoning text. The first character must be "{" and the last character must be "}".
 
 Base style constraints:
 - Dark background theme, around ${bg}.
@@ -207,9 +211,10 @@ export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', re
 Requirements:
 - Do not use markdown fences.
 - Do not output HTML, CSS, or JavaScript.
-- The plan must guide later code generation and must be concise.
-- Include: visualStyle, sharedClasses, scenes.
-- Each scene must include: id, start, duration, layout, visualElements, animationBeats, requiredClasses.
+- The plan must match the provided JSON Schema exactly.
+- Include only these top-level fields: visualStyle, sharedClasses, scenes.
+- Each scene must include only: id, start, duration, layout, visualElements, animationBeats, requiredClasses.
+- Use string arrays for visualElements, animationBeats, and requiredClasses.
 - Use semantic class names only. Do not use Tailwind, Bootstrap, or utility framework class names.
 - Do not use any legacy ship/warship visual terms unless the topic is explicitly a ship or aircraft carrier.
 - Choose layouts that match the topic, not a generic repeated placeholder.`,
@@ -237,7 +242,10 @@ Requirements:
 - The root tag must be one real <section class="scene ..."> element.
 - The section must include data-start and data-duration exactly matching the provided Timeline scene.
 - Do not include inline <style>. All styling must live in style.css.
-- Do not use Tailwind, Bootstrap, or utility framework class names. Use semantic classes only.
+- Do not use Tailwind, Bootstrap, or utility framework class names.
+- Never output classes like flex, grid, hidden, block, text-*, bg-*, rounded-*, shadow-*, p-*, m-*, w-*, h-*, items-*, justify-*, md:*, lg:*.
+- Class names may only be: scene, scene-shell, scene-kicker, scene-title, scene-summary, visual-panel, metric, timeline, comparison, diagram, card, panel, node, connector, label, badge, and topic-specific classes prefixed with viz-.
+- Keep the section compact: 8-24 child elements total, no long prose blocks, no SVG path data.
 - Do not rely on JavaScript to create visible content.
 - Include scene title text, explanatory text, geometric visuals, and code/scientific labels when relevant.
 - Follow the matching Code Plan scene and the provided Storyboard scene.
@@ -250,7 +258,11 @@ Requirements:
 - Background ${bg}, card ${card}, accent ${accent}.
 - Body font: ${bodyFont}. Code font: ${codeFont}.
 - Use CSS @keyframes. Animation intensity: ${animation}.
-- Define all classes used by the HTML.
+- Keep the CSS compact, under 300 lines.
+- Define only classes used by the provided HTML.
+- Allowed class selectors are: .scene, .scene-shell, .scene-kicker, .scene-title, .scene-summary, .visual-panel, .metric, .timeline, .comparison, .diagram, .card, .panel, .node, .connector, .label, .badge, .active, and classes prefixed with .viz-.
+- Do not define or mention Tailwind/Bootstrap utility selectors such as .flex, .grid, .hidden, .block, .text-*, .bg-*, .rounded-*, .shadow-*, .p-*, .m-*, .w-*, .h-*, .items-*, .justify-*, .md:*, .lg:*.
+- Use plain CSS with balanced braces. Prefer simple selectors and shared styles over per-scene duplication.
 - Style the exact HTML provided in Context. Do not invent unrelated major class systems.
 - Do not output Tailwind class names or assume any CSS framework. Use plain CSS.`,
 

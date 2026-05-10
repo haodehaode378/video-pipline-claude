@@ -6,6 +6,7 @@ import express from 'express'
 import cors from 'cors'
 import { WebSocketServer } from 'ws'
 import episodesRouter from './routes/episodes.js'
+import assistantRouter from './routes/assistant.js'
 import { listTemplates, getTemplateContent } from './utils/templates.js'
 import { setBroadcaster } from './pipeline/orchestrator.js'
 
@@ -20,6 +21,7 @@ app.use(express.json())
 app.use('/videos', express.static(path.join(__dirname, '..', 'videos')))
 
 app.use('/api/episodes', episodesRouter)
+app.use('/api/assistant', assistantRouter)
 
 app.get('/api/templates', (req, res) => {
   res.json(listTemplates())

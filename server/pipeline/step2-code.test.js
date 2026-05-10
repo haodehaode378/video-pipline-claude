@@ -3,10 +3,17 @@ import { step2CodeInternals } from './step2-code.js'
 
 const {
   assembleHtmlDocument,
+  buildSafeCSS,
   buildTimelineControllerJS,
+  CODE_PLAN_RESPONSE_FORMAT,
+  localSceneSection,
+  normalizeHtmlAttrs,
+  safeDebugName,
+  validateCodePlanSchema,
   validateGenerated,
   validateCodeBundle,
   tryRecoveredBundle,
+  withRuntimeSceneCSS,
 } = step2CodeInternals
 
 function validHtml() {
@@ -28,6 +35,63 @@ function validHtml() {
 }
 
 describe('step2 deterministic timeline controller', () => {
+  it('defines a strict JSON schema response format for code plans', () => {
+    expect(CODE_PLAN_RESPONSE_FORMAT.type).toBe('json_schema')
+    expect(CODE_PLAN_RESPONSE_FORMAT.json_schema.strict).toBe(true)
+    expect(CODE_PLAN_RESPONSE_FORMAT.json_schema.schema.additionalProperties).toBe(false)
+    expect(CODE_PLAN_RESPONSE_FORMAT.json_schema.schema.required).toEqual([
+      'visualStyle',
+      'sharedClasses',
+      'scenes',
+    ])
+  })
+
+  it('validates code plan objects against the local schema rules', () => {
+    const validPlan = {
+      visualStyle: 'Dark technical explainer with geometric process panels.',
+      sharedClasses: ['scene', 'scene-shell', 'visual-panel'],
+      scenes: [{
+        id: 'scene-01',
+        start: 0,
+        duration: 4,
+        layout: 'Centered title with process diagram.',
+        visualElements: ['title', 'diagram'],
+        animationBeats: ['fade in title', 'pulse diagram'],
+        requiredClasses: ['scene', 'scene-shell', 'viz-diagram'],
+      }],
+    }
+
+    expect(validateCodePlanSchema(validPlan)).toEqual([])
+    expect(validateGenerated('plan', JSON.stringify(validPlan))).toEqual([])
+  })
+
+  it('rejects code plans with extra fields or non-string visual element objects', () => {
+    const invalidPlan = {
+      visualStyle: 'Dark technical explainer.',
+      sharedClasses: ['scene'],
+      extra: true,
+      scenes: [{
+        id: 'scene-01',
+        start: 0,
+        duration: 4,
+        layout: 'Centered title.',
+        visualElements: [{ type: 'text', content: 'not allowed' }],
+        animationBeats: ['fade in'],
+        requiredClasses: ['scene'],
+      }],
+    }
+
+    const errors = validateCodePlanSchema(invalidPlan)
+    expect(errors).toContain('unexpected top-level field: extra')
+    expect(errors).toContain('scenes[0].visualElements[0] must be a non-empty string')
+    expect(validateGenerated('plan', JSON.stringify(invalidPlan))).toEqual(errors)
+  })
+
+  it('normalizes debug artifact names', () => {
+    expect(safeDebugName('HTML scene 1/6 (scene-01)')).toBe('html-scene-1-6-scene-01')
+    expect(safeDebugName('')).toBe('part')
+  })
+
   it('validates one scene section without requiring a full document', () => {
     const section = `<section class="scene atom-scene" data-start="0" data-duration="4">
   <div class="scene-shell">
@@ -65,6 +129,19 @@ describe('step2 deterministic timeline controller', () => {
     expect(html).toContain('data-start="4"')
   })
 
+  it('builds a valid local replacement section when AI scene HTML is empty', () => {
+    const section = localSceneSection(
+      { id: 'scene-01', title: 'Fallback Scene', start: 0, duration: 5, narration: 'Narration text.' },
+      { visual: 'A clear visual description.' },
+      { visualElements: ['element one', 'element two'] },
+    )
+
+    expect(validateGenerated('html-scene', section)).toEqual([])
+    expect(section).toContain('scene-local')
+    expect(section).toContain('Fallback Scene')
+    expect(section).toContain('element one')
+  })
+
   it('builds valid JS without creating primary scene DOM', () => {
     const js = buildTimelineControllerJS({
       scenes: [
@@ -93,6 +170,29 @@ describe('step2 deterministic timeline controller', () => {
     expect(validateCodeBundle(validHtml(), css, result.js)).toEqual([])
   })
 
+  it('keeps generated HTML renderable with safe CSS when AI CSS fails', () => {
+    const css = buildSafeCSS()
+    const result = tryRecoveredBundle(validHtml(), css, {
+      scenes: [
+        { start: 0, end: 4, duration: 4, narration: 'one' },
+        { start: 4, end: 8, duration: 4, narration: 'two' },
+        { start: 8, end: 12, duration: 4, narration: 'three' },
+      ],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(validateGenerated('css', css)).toEqual([])
+    expect(validateCodeBundle(validHtml(), css, result.js)).toEqual([])
+  })
+
+  it('appends active scene visibility rules after AI CSS', () => {
+    const css = withRuntimeSceneCSS('.scene { opacity: 0; visibility: hidden; }')
+
+    expect(css).toContain('.scene[data-start].active')
+    expect(css).toContain('opacity: 1 !important')
+    expect(validateGenerated('css', css)).toEqual([])
+  })
+
   it('rejects JavaScript that creates or replaces scene DOM', () => {
     const badJs = `
 const narrations = [];
@@ -102,5 +202,45 @@ window.__hfSeek = function() {};
 `
 
     expect(validateGenerated('js', badJs)).toContain('JS must not create or replace primary scene DOM')
+  })
+
+  it('normalizes HTML attributes with missing spaces', () => {
+    const fused = '<sectionclass="scene"data-start="0"data-duration="6.27"><divclass="scene-shell"><h1>Test</h1></div></section>'
+    const normalized = normalizeHtmlAttrs(fused)
+    expect(normalized).toBe('<section class="scene" data-start="0" data-duration="6.27"><div class="scene-shell"><h1>Test</h1></div></section>')
+    // Validate that normalized output passes html-scene validation
+    expect(validateGenerated('html-scene', normalized)).toEqual([])
+  })
+
+  it('leaves already-valid HTML unchanged', () => {
+    const valid = '<section class="scene" data-start="0" data-duration="4"><h1>OK</h1></section>'
+    expect(normalizeHtmlAttrs(valid)).toBe(valid)
+  })
+
+  it('localSceneSection handles object visualElements without [object Object]', () => {
+    const section = localSceneSection(
+      { id: 'scene-test', start: 0, duration: 5 },
+      { visual: 'A diagram' },
+      {
+        visualElements: [
+          { type: 'text', content: 'Element A', class: 'viz-text' },
+          { type: 'bubble', label: 'Bubble B' },
+        ],
+      },
+    )
+    expect(section).not.toContain('[object Object]')
+    expect(section).toContain('Element A')
+    expect(section).toContain('Bubble B')
+    expect(validateGenerated('html-scene', section)).toEqual([])
+  })
+
+  it('rejects broader Tailwind-style class names in scene HTML', () => {
+    const section = `<section class="scene flex rounded-xl shadow-lg" data-start="0" data-duration="4">
+  <h1>Bad utility classes</h1>
+</section>`
+
+    expect(validateGenerated('html-scene', section)).toContain(
+      'Tailwind-style utility classes are not allowed in generated scene HTML',
+    )
   })
 })
