@@ -141,8 +141,8 @@ function validateStoryboardPayload(payload) {
     const id = String(scene.id || `scene-${String(i + 1).padStart(2, '0')}`).trim()
     const visual = String(scene.visual || '').trim()
     const narration = String(scene.narration || '').trim()
-    const minDuration = Number(scene.minDuration || 3)
-    const maxDuration = Number(scene.maxDuration || Math.max(minDuration, 8))
+    const minDuration = Number(scene.minDuration || 5)
+    const maxDuration = Number(scene.maxDuration || Math.max(minDuration, 15))
 
     if (!id) return { error: `scene ${i + 1} id is required` }
     if (!visual) return { error: `${id} visual is required` }
@@ -246,12 +246,16 @@ router.post('/:slug/generate', async (req, res) => {
     return res.status(409).json({ error: 'research must be completed before generation' })
   }
 
-  const startStep = episode.steps.script === 'completed' && episode.storyboardContent ? 'narration' : 'script'
+  const hasStoryboard = episode.steps.script === 'completed' && episode.storyboardContent
+  const assetsDone = episode.steps.assets === 'completed' || episode.steps.assets === 'skipped'
+  const startStep = hasStoryboard
+    ? (assetsDone ? 'narration' : 'assets')
+    : 'script'
 
   episode.status = 'running'
   episode.error = null
   if (startStep === 'script') episode.codeFallback = null
-  if (startStep === 'narration') resetStepsAfter(episode, 'narration')
+  resetStepsAfter(episode, startStep)
   episode.updatedAt = new Date().toISOString()
   writeEpisodes(episodes)
 

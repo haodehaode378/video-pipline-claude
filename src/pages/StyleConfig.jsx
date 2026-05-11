@@ -94,39 +94,11 @@ export default function StyleConfig() {
       </div>
 
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">
-        <h2 className="text-sm font-medium text-gray-300 mb-1">默认风格模板</h2>
-        <p className="text-xs text-gray-600 mb-4">这里是全局兜底。新建剧集时单独选择的风格会优先于这里。</p>
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => setConfig((c) => ({ ...c, template: '' }))}
-            className={`px-3 py-1.5 rounded-lg border text-xs transition-colors ${
-              !config.template
-                ? 'border-tech-500 bg-tech-500/10 text-tech-400'
-                : 'border-gray-700 hover:border-gray-600 text-gray-400'
-            }`}
-          >
-            自定义配色
-          </button>
-          {templates.map((t) => (
-            <button
-              key={t.slug}
-              onClick={() => setConfig((c) => ({ ...c, template: t.slug }))}
-              className={`px-3 py-1.5 rounded-lg border text-xs transition-colors ${
-                config.template === t.slug
-                  ? 'border-tech-500 bg-tech-500/10 text-tech-400'
-                  : 'border-gray-700 hover:border-gray-600 text-gray-400'
-              }`}
-              title={t.description}
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
-        {config.template && templates.find((t) => t.slug === config.template) && (
-          <div className="p-3 bg-gray-800/50 rounded-lg text-xs text-gray-400">
-            {templates.find((t) => t.slug === config.template).description}
-          </div>
-        )}
+        <h2 className="text-sm font-medium text-gray-300 mb-1">视觉风格</h2>
+        <p className="text-xs text-gray-500 mb-2">
+          视觉风格现在由 AI 在代码生成前自动选择。AI 会分析话题内容并自主决定配色、字体、动画等参数。
+          下方的配色方案作为 AI 风格决策的兜底参考，当 AI 风格选择不可用时使用。
+        </p>
       </section>
 
       <section className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-4">

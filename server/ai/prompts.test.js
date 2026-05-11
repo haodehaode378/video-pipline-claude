@@ -69,11 +69,12 @@ describe('buildScriptPrompt', () => {
     try { fs.unlinkSync(STYLE_CONFIG_PATH) } catch {}
     const { buildScriptPrompt } = await import('./prompts.js')
     const result = buildScriptPrompt('Topic', '', 3, '')
-    expect(result.user).toContain('#1a1a2e') // default background
-    expect(result.user).toContain('#ffffff')  // default text
+    expect(result.user).toContain('Visual style will be auto-selected during code generation')
+    expect(result.user).toContain('dark theme as default')
+    expect(result.user).toContain('Animation intensity: minimal')
   })
 
-  it('injects custom colors from style config', async () => {
+  it('injects custom animation intensity from style config', async () => {
     writeStyleConfig({
       colors: { background: '#000000', text: '#ff0000', accent: '#00ff00', card: '#111111' },
       fonts: {},
@@ -81,9 +82,8 @@ describe('buildScriptPrompt', () => {
     })
     const { buildScriptPrompt } = await import('./prompts.js')
     const result = buildScriptPrompt('Topic', '', 3, '')
-    expect(result.user).toContain('#000000')
-    expect(result.user).toContain('#ff0000')
-    expect(result.user).toContain('extreme')
+    expect(result.user).toContain('Animation intensity: extreme')
+    expect(result.user).toContain('Visual style will be auto-selected during code generation')
   })
 
   it('system prompt describes storyboard writer role', async () => {
@@ -147,7 +147,6 @@ describe('buildCodePrompt', () => {
     expect(result.user).toContain('valid JSON only')
     expect(result.user).toContain('visualStyle')
     expect(result.user).toContain('sharedClasses')
-    expect(result.user).toContain('legacy ship')
   })
 
   it('injects previous stage context into code prompt', async () => {
@@ -168,9 +167,9 @@ describe('buildCodePrompt', () => {
     writeStyleConfig({})
     const { buildCodePrompt } = await import('./prompts.js')
     const result = buildCodePrompt('css', 'script', 'slug')
-    expect(result.user).toContain('#1a1a2e')
-    expect(result.user).toContain('#16213e')
-    expect(result.user).toContain('#e94560')
+    expect(result.user).toContain('#0d1117')
+    expect(result.user).toContain('#161b22')
+    expect(result.user).toContain('#58a6ff')
   })
 })
 

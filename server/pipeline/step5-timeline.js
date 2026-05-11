@@ -64,7 +64,7 @@ export function buildTimeline(segments, options = {}) {
   }
 }
 
-export async function runTimelineStep(episode) {
+export async function runStep5(episode) {
   console.log(`[Timeline] Calibrating timeline for "${episode.title}"...`)
 
   try {

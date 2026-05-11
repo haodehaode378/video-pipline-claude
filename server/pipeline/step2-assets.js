@@ -1,7 +1,7 @@
 import { info, warn } from '../utils/logger.js'
 import { readJSON, getScriptDir } from '../utils/file-helper.js'
 
-export async function runAssetsStep(episode) {
+export async function runStep2(episode) {
   const slug = episode.slug
   info(`[Assets] Starting asset fetching for "${episode.title}" (${slug})`)
 

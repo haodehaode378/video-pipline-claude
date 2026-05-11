@@ -10,15 +10,15 @@ function readSegments(episodeDir) {
   return JSON.parse(text)
 }
 
-export async function runStep6(episode) {
-  console.log(`[Step6] Generating TTS audio for "${episode.title}"...`)
+export async function runStep4(episode) {
+  console.log(`[Step4] Generating TTS audio for "${episode.title}"...`)
 
   try {
     const episodeDir = getEpisodeDir(episode.slug)
     const segments = readSegments(episodeDir)
 
     if (!Array.isArray(segments)) {
-      return { success: false, error: 'segments.json not found. Run Step 5 first.' }
+      return { success: false, error: 'segments.json not found. Run Step 3 first.' }
     }
     if (segments.length === 0) {
       return { success: false, error: 'No segments in segments.json' }
@@ -39,7 +39,7 @@ export async function runStep6(episode) {
       }
 
       const rawWav = path.join(ttsDir, `seg_${String(seg.index).padStart(3, '0')}.wav`)
-      console.log(`[Step6] Synthesizing segment ${seg.id}: "${narrationText.slice(0, 30)}..."`)
+      console.log(`[Step4] Synthesizing segment ${seg.id}: "${narrationText.slice(0, 30)}..."`)
 
       const result = await synthesizeSpeech(narrationText.trim(), rawWav)
       if (!result.success) {
@@ -56,14 +56,14 @@ export async function runStep6(episode) {
     }
 
     const outputWav = path.join(episodeDir, 'output', 'narration.wav')
-    console.log(`[Step6] Concatenating ${ttsFiles.length} audio segments...`)
+    console.log(`[Step4] Concatenating ${ttsFiles.length} audio segments...`)
     await concatAudio(ttsFiles, outputWav)
     writeText(path.join(episodeDir, 'narration', 'segments.json'), JSON.stringify(updatedSegments, null, 2))
 
-    console.log(`[Step6] Full narration ready: ${outputWav}`)
+    console.log(`[Step4] Full narration ready: ${outputWav}`)
     return { success: true, output: outputWav, segments: updatedSegments }
   } catch (err) {
-    console.error('[Step6] Error:', err.message)
+    console.error('[Step4] Error:', err.message)
     return { success: false, error: err.message }
   }
 }

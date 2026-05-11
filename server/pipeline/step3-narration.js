@@ -8,8 +8,8 @@ function readStoryboard(scriptDir) {
   return Array.isArray(parsed) ? parsed : parsed.scenes
 }
 
-export async function runStep5(episode) {
-  console.log(`[Step5] Extracting narration for "${episode.title}"...`)
+export async function runStep3(episode) {
+  console.log(`[Step3] Extracting narration for "${episode.title}"...`)
 
   try {
     const scriptDir = getScriptDir(episode.slug)
@@ -34,8 +34,8 @@ export async function runStep5(episode) {
         visual: scene.visual || '',
         narration,
         intent: scene.intent || '',
-        minDuration: Number(scene.minDuration || 3),
-        maxDuration: Number(scene.maxDuration || 8),
+        minDuration: Number(scene.minDuration || 5),
+        maxDuration: Number(scene.maxDuration || 15),
         animationHint: scene.animationHint || '',
         textFile,
       }
@@ -48,10 +48,10 @@ export async function runStep5(episode) {
 
     writeText(path.join(narrationDir, 'segments.json'), JSON.stringify(segments, null, 2))
 
-    console.log(`[Step5] Narration written to ${narrationDir}`)
+    console.log(`[Step3] Narration written to ${narrationDir}`)
     return { success: true, segments }
   } catch (err) {
-    console.error('[Step5] Error:', err.message)
+    console.error('[Step3] Error:', err.message)
     return { success: false, error: err.message }
   }
 }

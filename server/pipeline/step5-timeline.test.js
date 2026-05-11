@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeline } from './step-timeline.js'
+import { buildTimeline } from './step5-timeline.js'
 
 describe('buildTimeline', () => {
   it('uses real audio duration plus padding as scene duration', () => {

@@ -39,7 +39,8 @@ function computeCurrentStep(episode) {
     }
   }
   for (let i = 0; i < stepOrder.length; i++) {
-    if (steps[stepOrder[i]] !== 'completed') return i + 1
+    const s = steps[stepOrder[i]]
+    if (s && s !== 'completed') return i + 1
   }
   return stepOrder.length + 1
 }

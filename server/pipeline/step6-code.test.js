@@ -1,22 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { step2CodeInternals } from './step2-code.js'
+import { step6CodeInternals } from './step6-code.js'
 
 const {
   assembleHtmlDocument,
-  buildSafeCSS,
   buildTimelineControllerJS,
   CODE_PLAN_RESPONSE_FORMAT,
-  localSceneSection,
   normalizeHtmlAttrs,
   safeDebugName,
   validateCodePlanSchema,
   validateGenerated,
   validateCodeBundle,
   tryRecoveredBundle,
-  buildLocalVisualPlan,
   validateVisualPlan,
   withRuntimeSceneCSS,
-} = step2CodeInternals
+  buildMinimalVisualPlan,
+} = step6CodeInternals
 
 function validHtml() {
   return `<!DOCTYPE html>
@@ -36,7 +34,7 @@ function validHtml() {
 </html>`
 }
 
-describe('step2 deterministic timeline controller', () => {
+describe('step6 code generation', () => {
   it('defines a strict JSON schema response format for code plans', () => {
     expect(CODE_PLAN_RESPONSE_FORMAT.type).toBe('json_schema')
     expect(CODE_PLAN_RESPONSE_FORMAT.json_schema.strict).toBe(true)
@@ -131,19 +129,6 @@ describe('step2 deterministic timeline controller', () => {
     expect(html).toContain('data-start="4"')
   })
 
-  it('builds a valid local replacement section when AI scene HTML is empty', () => {
-    const section = localSceneSection(
-      { id: 'scene-01', title: 'Fallback Scene', start: 0, duration: 5, narration: 'Narration text.' },
-      { visual: 'A clear visual description.' },
-      { visualElements: ['element one', 'element two'] },
-    )
-
-    expect(validateGenerated('html-scene', section)).toEqual([])
-    expect(section).toContain('scene-local')
-    expect(section).toContain('Fallback Scene')
-    expect(section).toContain('element one')
-  })
-
   it('builds valid JS without creating primary scene DOM', () => {
     const js = buildTimelineControllerJS({
       scenes: [
@@ -172,21 +157,6 @@ describe('step2 deterministic timeline controller', () => {
     expect(validateCodeBundle(validHtml(), css, result.js)).toEqual([])
   })
 
-  it('keeps generated HTML renderable with safe CSS when AI CSS fails', () => {
-    const css = buildSafeCSS()
-    const result = tryRecoveredBundle(validHtml(), css, {
-      scenes: [
-        { start: 0, end: 4, duration: 4, narration: 'one' },
-        { start: 4, end: 8, duration: 4, narration: 'two' },
-        { start: 8, end: 12, duration: 4, narration: 'three' },
-      ],
-    })
-
-    expect(result.error).toBeUndefined()
-    expect(validateGenerated('css', css)).toEqual([])
-    expect(validateCodeBundle(validHtml(), css, result.js)).toEqual([])
-  })
-
   it('appends active scene visibility rules after AI CSS', () => {
     const css = withRuntimeSceneCSS('.scene { opacity: 0; visibility: hidden; }')
 
@@ -197,11 +167,11 @@ describe('step2 deterministic timeline controller', () => {
 
   it('rejects JavaScript that creates or replaces scene DOM', () => {
     const badJs = `
-const narrations = [];
-document.createElement('section');
-document.body.appendChild(document.createElement('div'));
-window.__hfSeek = function() {};
-`
+  const narrations = [];
+  document.createElement('section');
+  document.body.appendChild(document.createElement('div'));
+  window.__hfSeek = function() {};
+  `
 
     expect(validateGenerated('js', badJs)).toContain('JS must not create or replace primary scene DOM')
   })
@@ -210,7 +180,6 @@ window.__hfSeek = function() {};
     const fused = '<sectionclass="scene"data-start="0"data-duration="6.27"><divclass="scene-shell"><h1>Test</h1></div></section>'
     const normalized = normalizeHtmlAttrs(fused)
     expect(normalized).toBe('<section class="scene" data-start="0" data-duration="6.27"><div class="scene-shell"><h1>Test</h1></div></section>')
-    // Validate that normalized output passes html-scene validation
     expect(validateGenerated('html-scene', normalized)).toEqual([])
   })
 
@@ -249,23 +218,6 @@ window.__hfSeek = function() {};
     expect(normalizeHtmlAttrs(valid)).toBe(valid)
   })
 
-  it('localSceneSection handles object visualElements without [object Object]', () => {
-    const section = localSceneSection(
-      { id: 'scene-test', start: 0, duration: 5 },
-      { visual: 'A diagram' },
-      {
-        visualElements: [
-          { type: 'text', content: 'Element A', class: 'viz-text' },
-          { type: 'bubble', label: 'Bubble B' },
-        ],
-      },
-    )
-    expect(section).not.toContain('[object Object]')
-    expect(section).toContain('Element A')
-    expect(section).toContain('Bubble B')
-    expect(validateGenerated('html-scene', section)).toEqual([])
-  })
-
   it('rejects broader Tailwind-style class names in scene HTML', () => {
     const section = `<section class="scene flex rounded-xl shadow-lg" data-start="0" data-duration="4">
   <h1>Bad utility classes</h1>
@@ -276,75 +228,25 @@ window.__hfSeek = function() {};
     )
   })
 
-  it('builds topic-aware local visual plans without beverage objects for university material topics', () => {
-    const plan = buildLocalVisualPlan(
-      { title: '武汉科技大学为什么被称为钢铁摇篮', keywords: '大学, 冶金, 钢铁, 材料' },
-      {
-        scenes: [
-          {
-            id: 'scene-01',
-            title: '校门背后的钢铁基因',
-            visual: '校门、实验室和高炉意象共同入场',
-          },
-        ],
-      },
-      {
-        scenes: [{ id: 'scene-01', start: 0, duration: 6 }],
-      },
-    )
+  it('builds minimal dynamic visual plan from timeline scenes', () => {
+    const plan = buildMinimalVisualPlan([
+      { id: 'scene-01', start: 0, duration: 6 },
+      { id: 'scene-02', start: 6, duration: 8 },
+      { id: 'scene-03', start: 14, duration: 6 },
+    ])
 
-    const scene = plan.scenes[0]
-    expect(scene.visualDomain).toBe('university')
-    expect(scene.heroObjects.map((item) => item.type)).toEqual(['schoolGate', 'blastFurnace', 'book'])
-    expect(scene.avoidObjects).toContain('sodaCan')
-    expect(scene.heroObjects.map((item) => item.type)).not.toContain('sodaCan')
+    expect(plan.version).toBe(1)
+    expect(plan.source).toBe('minimal-dynamic')
+    expect(plan.scenes).toHaveLength(3)
+    expect(plan.scenes[0].sceneType).toBe('openingHook')
+    expect(plan.scenes[2].sceneType).toBe('finale')
+    expect(plan.scenes[1].sceneType).toBe('genericVisual')
+    // No hardcoded keyword-based domain matching — uses 'general' for all
+    expect(plan.scenes[0].visualDomain).toBe('general')
+    expect(plan.scenes[0].heroObjects[0].type).toBe('genericBadge')
   })
 
-  it('does not classify generic brand wording as beverage for bluetooth headphone topics', () => {
-    const plan = buildLocalVisualPlan(
-      { title: '蓝牙耳机品牌为什么越来越卷', keywords: '蓝牙耳机, 降噪, 音频, 品牌' },
-      {
-        scenes: [
-          {
-            id: 'scene-01',
-            title: '耳机品牌竞争开场',
-            visual: '左右耳机、声波和芯片信号入场',
-          },
-        ],
-      },
-      {
-        scenes: [{ id: 'scene-01', start: 0, duration: 6 }],
-      },
-    )
-
-    const scene = plan.scenes[0]
-    expect(scene.visualDomain).toBe('consumer_electronics')
-    expect(scene.heroObjects.map((item) => item.type)).toEqual(['headphones', 'audioWaves', 'chip'])
-    expect(scene.avoidObjects).toContain('sodaCan')
-    expect(scene.heroObjects.map((item) => item.type)).not.toContain('drinkCup')
-  })
-
-  it.each([
-    ['城市旅游', '武汉城市旅游和地铁街区', 'city_travel', ['citySkyline', 'timelineRail', 'flowNodes']],
-    ['医疗健康', '医院医生如何做疾病诊断', 'healthcare', ['medicalCross', 'brainDiagram', 'flowNodes']],
-    ['金融商业', '股票市场和银行利润为什么波动', 'finance_business', ['moneyStack', 'chartRadar', 'flowNodes']],
-    ['能源环保', '新能源电池和碳中和', 'energy_environment', ['leafEnergy', 'gearLoop', 'chartRadar']],
-    ['体育赛事', '篮球比赛冠军训练方法', 'sports', ['sportsCourt', 'chartRadar', 'flowNodes']],
-    ['文化影视', '电影音乐和历史文化故事', 'culture_media', ['filmFrame', 'timelineRail', 'genericBadge']],
-    ['非饮料品牌', '服装品牌如何做门店增长', 'business_brand', ['shoppingBag', 'chartRadar', 'flowNodes']],
-  ])('builds richer visual plan for %s topics', (_label, title, domain, objects) => {
-    const plan = buildLocalVisualPlan(
-      { title, keywords: title },
-      { scenes: [{ id: 'scene-01', title, visual: title }] },
-      { scenes: [{ id: 'scene-01', start: 0, duration: 6 }] },
-    )
-
-    expect(plan.scenes[0].visualDomain).toBe(domain)
-    expect(plan.scenes[0].heroObjects.map((item) => item.type)).toEqual(objects)
-    expect(plan.scenes[0].heroObjects.map((item) => item.type)).not.toContain('sodaCan')
-  })
-
-  it('filters avoided or off-domain beverage objects from API visual plans', () => {
+  it('filters avoided or off-domain objects from API visual plans', () => {
     const result = validateVisualPlan(
       {
         scenes: [{

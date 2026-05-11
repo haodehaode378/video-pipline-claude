@@ -26,8 +26,8 @@ function parseStoryboard(text) {
     const id = scene.id || `scene-${String(index + 1).padStart(2, '0')}`
     const narration = String(scene.narration || '').trim()
     const visual = String(scene.visual || '').trim()
-    const minDuration = Number(scene.minDuration || 3)
-    const maxDuration = Number(scene.maxDuration || Math.max(minDuration + 3, 8))
+    const minDuration = Number(scene.minDuration || 5)
+    const maxDuration = Number(scene.maxDuration || Math.max(minDuration + 5, 15))
 
     if (!narration) throw new Error(`${id} narration is required`)
     if (!visual) throw new Error(`${id} visual is required`)

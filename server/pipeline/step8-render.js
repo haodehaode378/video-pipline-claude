@@ -10,9 +10,9 @@ const RENDER_ENGINE = process.env.RENDER_ENGINE || 'remotion'
 const MIN_EFFECTIVE_FPS = parseFloat(process.env.RENDER_MIN_EFFECTIVE_FPS || '8')
 const MAX_RENDER_FRAMES = parseInt(process.env.RENDER_MAX_FRAMES || '1200', 10)
 
-export async function runStep4(episode, fps = 30) {
+export async function runStep8(episode, fps = 30) {
   const slug = episode.slug
-  info(`[Step4] Rendering video for "${episode.title}" (${slug})`)
+  info(`[Step8] Rendering video for "${episode.title}" (${slug})`)
 
   const dir = getEpisodeDir(slug)
 
@@ -70,7 +70,7 @@ export async function runStep4(episode, fps = 30) {
     })
 
     const totalFrames = Math.ceil(totalDuration * fps)
-    console.log(`[Step4] Duration: ${totalDuration}s, Frames: ${totalFrames} @ ${fps}fps`)
+    console.log(`[Step8] Duration: ${totalDuration}s, Frames: ${totalFrames} @ ${fps}fps`)
 
     const minFrames = Math.ceil(totalDuration * MIN_EFFECTIVE_FPS)
     const maxFrames = Math.min(totalFrames, Math.max(minFrames, Math.min(MAX_RENDER_FRAMES, totalFrames)))
@@ -78,7 +78,7 @@ export async function runStep4(episode, fps = 30) {
     const actualFrames = Math.ceil(totalFrames / step)
     const actualFps = actualFrames / totalDuration
 
-    console.log(`[Step4] Capturing ~${actualFrames} frames (step=${step}, effective ${actualFps.toFixed(1)}fps)`)
+    console.log(`[Step8] Capturing ~${actualFrames} frames (step=${step}, effective ${actualFps.toFixed(1)}fps)`)
 
     for (let i = 0; i < totalFrames; i += step) {
       const time = i / fps
@@ -90,7 +90,7 @@ export async function runStep4(episode, fps = 30) {
       })
     }
 
-    console.log('[Step4] Encoding MP4 with ffmpeg...')
+    console.log('[Step8] Encoding MP4 with ffmpeg...')
     await imagesToVideo(framesDir, outputPath, actualFps)
 
     for (const f of fs.readdirSync(framesDir)) {
@@ -98,7 +98,7 @@ export async function runStep4(episode, fps = 30) {
     }
     fs.rmdirSync(framesDir)
 
-    info(`[Step4] Video ready: ${outputPath}`)
+    info(`[Step8] Video ready: ${outputPath}`)
     return { success: true, output: outputPath }
   } catch (err) {
     return { success: false, error: err.message }

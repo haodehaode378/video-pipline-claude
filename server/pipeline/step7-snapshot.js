@@ -7,9 +7,9 @@ import { info, warn } from '../utils/logger.js'
 
 const RENDER_ENGINE = process.env.RENDER_ENGINE || 'remotion'
 
-export async function runStep3(episode) {
+export async function runStep7(episode) {
   const slug = episode.slug
-  info(`[Step3] Taking snapshots for "${episode.title}" (${slug})`)
+  info(`[Step7] Taking snapshots for "${episode.title}" (${slug})`)
 
   const dir = getEpisodeDir(slug)
 
@@ -67,7 +67,7 @@ export async function runStep3(episode) {
       })
     }
 
-    info(`[Step3] Captured ${scenes.length} snapshots`)
+    info(`[Step7] Captured ${scenes.length} snapshots`)
     return { success: true, output: snapDir, count: scenes.length }
   } catch (err) {
     return { success: false, error: err.message }

@@ -17,9 +17,9 @@ function getEnabledEffects() {
   return []
 }
 
-export async function runStep7(episode) {
+export async function runStep10(episode) {
   const slug = episode.slug
-  info(`[Step7] Muxing final video for "${episode.title}" (${slug})`)
+  info(`[Step10] Muxing final video for "${episode.title}" (${slug})`)
 
   try {
     const episodeDir = getEpisodeDir(slug)
@@ -28,10 +28,10 @@ export async function runStep7(episode) {
     const outputPath = path.join(episodeDir, 'output', `episode-${slug}-voiceover.mp4`)
 
     if (!fs.existsSync(videoPath)) {
-      return { success: false, error: 'Video not found — run Step 4 first' }
+      return { success: false, error: 'Video not found — run Step 8 first' }
     }
     if (!fs.existsSync(audioPath)) {
-      return { success: false, error: 'Narration WAV not found — run Step 6 first' }
+      return { success: false, error: 'Narration WAV not found — run Step 4 first' }
     }
 
     const effects = getEnabledEffects()
@@ -53,7 +53,7 @@ export async function runStep7(episode) {
       subtitlePath = episode.subtitlesContent.assPath
     }
 
-    info(`[Step7] Effects: ${effects.join(', ') || 'none'}`)
+    info(`[Step10] Effects: ${effects.join(', ') || 'none'}`)
 
     let finalOutput = outputPath
     if (videoFilters || (bgmPath && fs.existsSync(bgmPath)) || subtitlePath) {
@@ -68,10 +68,10 @@ export async function runStep7(episode) {
       finalOutput = await muxWithEffects(videoPath, audioPath, outputPath, {})
     }
 
-    info(`[Step7] Final video ready: ${finalOutput}`)
+    info(`[Step10] Final video ready: ${finalOutput}`)
     return { success: true, output: finalOutput }
   } catch (err) {
-    info(`[Step7] Error: ${err.message}`)
+    info(`[Step10] Error: ${err.message}`)
     return { success: false, error: err.message }
   }
 }

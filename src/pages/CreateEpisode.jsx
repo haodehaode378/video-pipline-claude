@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import AIAssistantPanel from '../components/AIAssistantPanel'
 
@@ -13,18 +13,10 @@ export default function CreateEpisode() {
   const [sourceMaterial, setSourceMaterial] = useState('')
   const [duration, setDuration] = useState(3)
   const [template, setTemplate] = useState('')
-  const [templates, setTemplates] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [batchTopics, setBatchTopics] = useState('')
   const [batchProgress, setBatchProgress] = useState(null)
-
-  useEffect(() => {
-    fetch('/api/templates')
-      .then((r) => r.json())
-      .then((data) => setTemplates(data || []))
-      .catch(() => setTemplates([]))
-  }, [])
 
   const createEpisode = async (title) => {
     const res = await fetch('/api/episodes', {
@@ -158,7 +150,7 @@ export default function CreateEpisode() {
               setDuration={setDuration}
               template={template}
               setTemplate={setTemplate}
-              templates={templates}
+              templates={[]}
             />
 
             <button
@@ -305,22 +297,11 @@ function SharedFields({
 
       <div>
         <label className="block text-sm text-gray-400 mb-2">视觉风格</label>
-        <select
-          value={template}
-          onChange={(e) => setTemplate(e.target.value)}
-          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:outline-none focus:border-tech-500 transition-colors"
-        >
-          <option value="">使用全局默认</option>
-          {templates.map((t) => (
-            <option key={t.slug} value={t.slug}>
-              {t.name}
-            </option>
-          ))}
-        </select>
+        <div className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm text-gray-400">
+          AI 将根据话题内容自动选择视觉风格
+        </div>
         <p className="text-xs text-gray-500 mt-2">
-          {template
-            ? templates.find((t) => t.slug === template)?.description || '已选择单集风格'
-            : '未选择单集风格时，生成会使用风格配置页里的全局默认。'}
+          系统会在生成代码前自动分析内容并决定配色、字体、动画等风格参数，无需手动选择模板。
         </p>
       </div>
     </>

@@ -1,22 +1,53 @@
 import { readJSON } from '../utils/file-helper.js'
-import { getTemplateContent } from '../utils/templates.js'
 
 function loadStyleConfig() {
   return readJSON('data/style-config.json') || {}
 }
 
-function getTemplatePrompt(slug) {
-  if (!slug) return ''
-  const t = getTemplateContent(slug)
-  if (!t) return ''
-
-  const idx = t.content.indexOf('# Hard Prompt')
-  const content = idx === -1 ? t.content : t.content.slice(idx)
-  return `\n\n## Style Template Constraint: ${t.name}\n${content}`
+function readStyleDecision(slug) {
+  try {
+    return readJSON(`videos/${slug}/style-decision.json`) || null
+  } catch {
+    return null
+  }
 }
 
-function getEffectiveTemplate(episodeTemplate, globalTemplate) {
-  return episodeTemplate || globalTemplate || ''
+function buildStyleDirective(slug) {
+  const decision = readStyleDecision(slug)
+  if (!decision) return ''
+  return `
+## Visual Style Directive (AI-selected for this topic)
+Style name: ${decision.styleName}
+Color palette:
+  - Background: ${decision.colorPalette?.background || '#0d1117'}
+  - Card: ${decision.colorPalette?.card || '#161b22'}
+  - Accent: ${decision.colorPalette?.accent || '#58a6ff'}
+  - Text: ${decision.colorPalette?.text || '#f0f6fc'}
+  - Code: ${decision.colorPalette?.code || '#e6edf3'}
+Typography:
+  - Body: ${decision.typography?.body || 'system-ui, sans-serif'}
+  - Code: ${decision.typography?.code || 'JetBrains Mono, monospace'}
+Visual density: ${decision.visualDensity || 'balanced'}
+Animation intensity: ${decision.animationIntensity || 'minimal'}
+Decorative elements: ${(decision.decorativeElements || []).join(', ')}
+Layout strategy: ${decision.sceneLayoutStrategy || 'Visual panel left, text content right'}
+Forbidden: ${(decision.forbiddenPatterns || []).join(', ')}
+`
+}
+
+function resolveStyleColors(slug) {
+  const decision = readStyleDecision(slug)
+  const style = loadStyleConfig()
+  return {
+    bg: decision?.colorPalette?.background || style.colors?.background || '#0d1117',
+    card: decision?.colorPalette?.card || style.colors?.card || '#161b22',
+    accent: decision?.colorPalette?.accent || style.colors?.accent || '#58a6ff',
+    text: decision?.colorPalette?.text || style.colors?.text || '#f0f6fc',
+    code: decision?.colorPalette?.code || style.colors?.code || '#e6edf3',
+    bodyFont: decision?.typography?.body || style.fonts?.body || 'system-ui, sans-serif',
+    codeFont: decision?.typography?.code || style.fonts?.code || 'JetBrains Mono, monospace',
+    animation: decision?.animationIntensity || style.animation || 'minimal',
+  }
 }
 
 export function buildResearchSearcherPrompt(episode, task = {}) {
@@ -126,13 +157,14 @@ Revise and output final Markdown. Requirements:
   }
 }
 
-export function buildScriptPrompt(topic, keywords, duration, sourceMaterial, research = '') {
-  const style = loadStyleConfig()
-  const { colors = {}, fonts = {}, animation = 'minimal' } = style
-  const bg = colors.background || '#1a1a2e'
-  const text = colors.text || '#ffffff'
-  const bodyFont = fonts.body || 'sans-serif'
-  const codeFont = fonts.code || 'monospace'
+export function buildScriptPrompt(topic, keywords, duration, sourceMaterial, research = '', slug = '') {
+  const { animation } = loadStyleConfig()
+  const animIntensity = animation || 'minimal'
+
+  const durationMinutes = Number(duration) || 1
+  const targetSeconds = durationMinutes * 60
+  const narrationTargetChars = Math.round(targetSeconds * 2)
+  const suggestSceneCount = Math.max(2, Math.round(durationMinutes * 3))
 
   return {
     system: [
@@ -164,20 +196,21 @@ Output format:
       "id": "scene-01",
       "title": "short Chinese title",
       "visual": "specific layout and animation description",
-      "narration": "natural spoken Chinese narration, 1-3 sentences",
+      "narration": "natural spoken Chinese narration, enough to fill the scene time",
       "intent": "what this scene teaches",
-      "minDuration": 3,
-      "maxDuration": 8,
+      "minDuration": 5,
+      "maxDuration": ${Math.round(targetSeconds / suggestSceneCount * 1.5)},
       "animationHint": "intro/hold/outro animation guidance"
     }
   ]
 }
 
 Rules:
-- Return exactly 6 scenes for the whole video.
-- Keep every string short. title <= 16 Chinese chars, visual <= 80 Chinese chars, narration <= 55 Chinese chars, intent <= 40 Chinese chars, animationHint <= 50 Chinese chars.
+- Target: about ${durationMinutes} min (${targetSeconds}s total). Create enough scenes to fill this naturally — roughly ${suggestSceneCount} scenes is a good starting point, but adjust based on content complexity.
+- Total narration across all scenes should be about ${narrationTargetChars} Chinese characters. Split naturally across scenes — simpler concepts can have shorter scenes, complex ones longer.
+- Keep title <= 16 Chinese chars, visual <= 80 Chinese chars, intent <= 40 Chinese chars, animationHint <= 50 Chinese chars.
 - Visual descriptions must include layout, key elements, and motion, but no long prose.
-- Narration must be natural spoken Chinese, 1-2 short sentences per scene.
+- Narration must be natural spoken Chinese, 3-5 natural sentences per scene.
 - minDuration and maxDuration are initial pacing hints only; final timing will be based on real TTS audio duration.
 - maxDuration must be greater than or equal to minDuration.
 - Facts must come from Research or user material. Do not fabricate facts.
@@ -186,25 +219,21 @@ Rules:
 - Output JSON must close completely. Do not add explanations before or after JSON.
 - Do not include <think> tags or reasoning text. The first character must be "{" and the last character must be "}".
 
-Base style constraints:
-- Dark background theme, around ${bg}.
-- Text color: ${text}. Code font: ${codeFont}.
-- Animation intensity: ${animation}.
-- Use geometric shapes, process diagrams, and code blocks.
-- Body font: ${bodyFont}.`,
+Visual style will be auto-selected during code generation. For now, use a dark theme as default.
+Animation intensity: ${animIntensity}. Use geometric shapes, process diagrams, and code blocks.`,
   }
 }
 
 export function buildCodePrompt(type, storyboard, slug, episodeTemplate = '', research = '', timeline = '', context = '') {
-  const style = loadStyleConfig()
-  const { colors = {}, fonts = {}, animation = 'minimal', template } = style
-  const bg = colors.background || '#1a1a2e'
-  const card = colors.card || '#16213e'
-  const accent = colors.accent || '#e94560'
-  const bodyFont = fonts.body || 'sans-serif'
-  const codeFont = fonts.code || 'monospace'
+  const style = resolveStyleColors(slug)
+  const bg = style.bg
+  const card = style.card
+  const accent = style.accent
+  const bodyFont = style.bodyFont
+  const codeFont = style.codeFont
+  const animation = style.animation
 
-  const templatePrompt = getTemplatePrompt(getEffectiveTemplate(episodeTemplate, template))
+  const styleDirective = buildStyleDirective(slug)
 
   const typeGuides = {
     plan: `Generate a compact JSON implementation plan for a micro-course HTML video. Output valid JSON only.
@@ -216,7 +245,6 @@ Requirements:
 - Each scene must include only: id, start, duration, layout, visualElements, animationBeats, requiredClasses.
 - Use string arrays for visualElements, animationBeats, and requiredClasses.
 - Use semantic class names only. Do not use Tailwind, Bootstrap, or utility framework class names.
-- Do not use any legacy ship/warship visual terms unless the topic is explicitly a ship or aircraft carrier.
 - Choose layouts that match the topic, not a generic repeated placeholder.`,
 
     html: `Generate one complete HTML file for a micro-course video. Output code only, from <!DOCTYPE html> to </html>.
@@ -232,8 +260,7 @@ Requirements:
 - Do not use Tailwind, Bootstrap, or utility framework class names. Use semantic classes that style.css defines.
 - Follow the provided Code Plan exactly when choosing layouts, class names, and visual elements.
 - Include title text, explanatory text, geometric visuals, and code blocks.
-- Link same-directory style.css and script.js.
-- Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
+- Link same-directory style.css and script.js.`,
 
     'html-scene': `Generate exactly one HTML section for one timed micro-course video scene. Output the <section> element only.
 Requirements:
@@ -248,8 +275,7 @@ Requirements:
 - Keep the section compact: 8-24 child elements total, no long prose blocks, no SVG path data.
 - Do not rely on JavaScript to create visible content.
 - Include scene title text, explanatory text, geometric visuals, and code/scientific labels when relevant.
-- Follow the matching Code Plan scene and the provided Storyboard scene.
-- Use dark visual base: background ${bg}, card ${card}, accent ${accent}.`,
+- Follow the matching Code Plan scene and the provided Storyboard scene.`,
 
     css: `Generate complete CSS. Output CSS code only.
 Requirements:
@@ -300,6 +326,8 @@ Output type:
 ${type}
 
 ${typeGuides[type] || ''}
-${templatePrompt}`,
+${styleDirective}`,
   }
 }
+
+export { readStyleDecision, resolveStyleColors }

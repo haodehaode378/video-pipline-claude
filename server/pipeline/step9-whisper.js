@@ -2,7 +2,7 @@ import { info, warn } from '../utils/logger.js'
 import { getEpisodeDir, readJSON, writeText } from '../utils/file-helper.js'
 import path from 'node:path'
 
-export async function runWhisperStep(episode) {
+export async function runStep9(episode) {
   const slug = episode.slug
   info(`[Whisper] Starting subtitle generation for "${episode.title}" (${slug})`)
 

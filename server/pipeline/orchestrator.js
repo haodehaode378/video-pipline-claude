@@ -2,15 +2,16 @@ import { readJSON, writeJSON } from '../utils/file-helper.js'
 import { info } from '../utils/logger.js'
 import { runStep0 } from './step0-research.js'
 import { runStep1 } from './step1-script.js'
-import { runStep2 } from './step2-code.js'
-import { runStep3 } from './step3-snapshot.js'
-import { runStep4 } from './step4-render.js'
-import { runStep5 } from './step5-narration.js'
-import { runStep6 } from './step6-tts.js'
-import { runTimelineStep } from './step-timeline.js'
-import { runStep7 } from './step7-mux.js'
-import { runAssetsStep } from './step-assets.js'
-import { runWhisperStep } from './step-whisper.js'
+import { runStep2 } from './step2-assets.js'
+import { runStep3 } from './step3-narration.js'
+import { runStep4 } from './step4-tts.js'
+import { runStep5 } from './step5-timeline.js'
+import { runStep6 } from './step6-code.js'
+import { runStep7 } from './step7-snapshot.js'
+import { runStep8 } from './step8-render.js'
+import { runStep9 } from './step9-whisper.js'
+import { runStep10 } from './step10-mux.js'
+import { runStyleAutoSelection } from './step0b-style.js'
 
 let broadcast = null
 export function setBroadcaster(fn) { broadcast = fn }
@@ -112,7 +113,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('assets', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.assets = 'running' })
-    const r = await runAssetsStep(episode)
+    const r = await runStep2(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.assets = 'failed'
@@ -129,7 +130,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('narration', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.narration = 'running' })
-    const r = await runStep5(episode)
+    const r = await runStep3(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.narration = 'failed'
@@ -146,7 +147,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('tts', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.tts = 'running' })
-    const r = await runStep6(episode)
+    const r = await runStep4(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.tts = 'failed'
@@ -163,7 +164,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('timeline', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.timeline = 'running' })
-    const r = await runTimelineStep(episode)
+    const r = await runStep5(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.timeline = 'failed'
@@ -180,8 +181,17 @@ export async function startPipeline(episode, startFrom, options = {}) {
   }
 
   if (shouldRun('code', startIdx, stopIdx)) {
+    // AI style auto-selection: analyze content and decide visual style before code generation
+    info(`[Orchestrator] Running style auto-selection for "${episode.title}"...`)
+    const styleResult = await runStyleAutoSelection(episode)
+    if (!styleResult.success) {
+      info(`[Orchestrator] Style auto-selection failed (soft), continuing with config-derived style`)
+    } else {
+      info(`[Orchestrator] Style auto-selected: ${styleResult.style?.styleName || 'unknown'}`)
+    }
+
     updateEpisode(slug, (ep) => { ep.steps.code = 'running' })
-    const r = await runStep2(episode)
+    const r = await runStep6(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.code = 'failed'
@@ -194,13 +204,6 @@ export async function startPipeline(episode, startFrom, options = {}) {
       ep.steps.code = 'completed'
       if (r.codeContent) ep.codeContent = r.codeContent
       if (r.codePlan) ep.codePlanContent = r.codePlan
-      ep.codeFallback = r.fallback
-        ? {
-            used: true,
-            reason: r.fallbackReason || 'AI code generation failed; local fallback was used.',
-            at: new Date().toISOString(),
-          }
-        : null
     })
   }
 
@@ -211,8 +214,8 @@ export async function startPipeline(episode, startFrom, options = {}) {
     })
 
     const promises = [
-      shouldRun('snapshot', startIdx, stopIdx) ? runStep3(episode) : Promise.resolve({ success: true, skip: true }),
-      shouldRun('render', startIdx, stopIdx) ? runStep4(episode, fps) : Promise.resolve({ success: true, skip: true }),
+      shouldRun('snapshot', startIdx, stopIdx) ? runStep7(episode) : Promise.resolve({ success: true, skip: true }),
+      shouldRun('render', startIdx, stopIdx) ? runStep8(episode, fps) : Promise.resolve({ success: true, skip: true }),
     ]
 
     const [s3, s4] = await Promise.all(promises)
@@ -233,7 +236,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('whisper', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.whisper = 'running' })
-    const r = await runWhisperStep(episode)
+    const r = await runStep9(episode)
     if (!r.success) {
       updateEpisode(slug, (ep) => {
         ep.steps.whisper = 'failed'
@@ -250,7 +253,7 @@ export async function startPipeline(episode, startFrom, options = {}) {
 
   if (shouldRun('mux', startIdx, stopIdx)) {
     updateEpisode(slug, (ep) => { ep.steps.mux = 'running' })
-    const r = await runStep7(episode)
+    const r = await runStep10(episode)
     updateEpisode(slug, (ep) => {
       ep.steps.mux = r.success ? 'completed' : 'failed'
       ep.status = r.success ? 'completed' : 'failed'
