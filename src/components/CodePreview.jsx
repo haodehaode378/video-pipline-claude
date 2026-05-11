@@ -48,14 +48,18 @@ export default function CodePreview({ code, slug, onSaved }) {
             }),
           }
         : { ...code, ...editing }
-      const res = await fetch(`/api/episodes/${slug}/code`, {
+      const res = await fetch(`/api/episodes/${encodeURIComponent(slug)}/code`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       })
-      if (!res.ok) throw new Error('保存失败')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '保存失败')
+      }
       setMsg('已保存')
-      if (onSaved) onSaved(updated)
+      const savedEpisode = await res.json()
+      if (onSaved) onSaved(savedEpisode.codeContent || updated, savedEpisode)
     } catch (err) {
       setMsg(`错误：${err.message}`)
     } finally {

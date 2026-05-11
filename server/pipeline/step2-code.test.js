@@ -13,6 +13,8 @@ const {
   validateGenerated,
   validateCodeBundle,
   tryRecoveredBundle,
+  buildLocalVisualPlan,
+  validateVisualPlan,
   withRuntimeSceneCSS,
 } = step2CodeInternals
 
@@ -272,5 +274,53 @@ window.__hfSeek = function() {};
     expect(validateGenerated('html-scene', section)).toContain(
       'Tailwind-style utility classes are not allowed in generated scene HTML',
     )
+  })
+
+  it('builds topic-aware local visual plans without beverage objects for university material topics', () => {
+    const plan = buildLocalVisualPlan(
+      { title: '武汉科技大学为什么被称为钢铁摇篮', keywords: '大学, 冶金, 钢铁, 材料' },
+      {
+        scenes: [
+          {
+            id: 'scene-01',
+            title: '校门背后的钢铁基因',
+            visual: '校门、实验室和高炉意象共同入场',
+          },
+        ],
+      },
+      {
+        scenes: [{ id: 'scene-01', start: 0, duration: 6 }],
+      },
+    )
+
+    const scene = plan.scenes[0]
+    expect(scene.visualDomain).toBe('university')
+    expect(scene.heroObjects.map((item) => item.type)).toEqual(['schoolGate', 'blastFurnace', 'book'])
+    expect(scene.avoidObjects).toContain('sodaCan')
+    expect(scene.heroObjects.map((item) => item.type)).not.toContain('sodaCan')
+  })
+
+  it('validates API visual plans and clamps unknown visual objects', () => {
+    const expectedScenes = [{ id: 'scene-01' }]
+    const valid = validateVisualPlan(
+      {
+        source: 'api',
+        scenes: [{
+          id: 'scene-01',
+          sceneType: 'openingHook',
+          heroObjects: [{ type: 'madeUpObject', label: 'unknown' }],
+        }],
+      },
+      expectedScenes,
+    )
+
+    expect(valid.error).toBeUndefined()
+    expect(valid.visualPlan.scenes[0].heroObjects[0].type).toBe('genericBadge')
+
+    const invalid = validateVisualPlan(
+      { scenes: [{ id: 'scene-01', sceneType: 'unknownTemplate' }] },
+      expectedScenes,
+    )
+    expect(invalid.error).toBe('scene-01.sceneType is invalid')
   })
 })

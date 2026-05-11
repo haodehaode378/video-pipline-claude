@@ -222,9 +222,11 @@ export default function EpisodeDetail() {
       : displayEpisode.status === 'failed'
         ? '失败'
         : displayEpisode.status === 'research_completed'
-          ? '资料已完成，等待确认生成'
-          : displayEpisode.status === 'storyboard_ready'
-            ? '分镜已完成，等待确认后续生成'
+        ? '资料已完成，等待确认生成'
+        : displayEpisode.status === 'storyboard_ready'
+          ? '分镜已完成，等待确认后续生成'
+          : displayEpisode.status === 'code_ready'
+            ? '代码已保存，等待重新截图/渲染'
           : displayEpisode.status === 'brief_pending'
             ? '等待审核资料收集要求'
             : '进行中'
@@ -453,7 +455,7 @@ export default function EpisodeDetail() {
           <CodePreview
             code={displayEpisode.codeContent}
             slug={slug}
-            onSaved={(code) => setEpisode((prev) => ({ ...prev, codeContent: code }))}
+            onSaved={(code, savedEpisode) => setEpisode((prev) => savedEpisode || { ...prev, codeContent: code })}
           />
         </div>
       )}

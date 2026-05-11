@@ -11,6 +11,37 @@ import fs from 'node:fs'
 
 const RENDER_ENGINE = process.env.RENDER_ENGINE || 'remotion'
 
+const ALLOWED_SCENE_TYPES = [
+  'openingHook',
+  'comparison',
+  'timeline',
+  'dataVisual',
+  'experiment',
+  'mechanism',
+  'processFlow',
+  'finale',
+  'genericVisual',
+]
+
+const ALLOWED_VISUAL_OBJECTS = [
+  'schoolGate',
+  'blastFurnace',
+  'book',
+  'graduationCap',
+  'labFlask',
+  'crystalLattice',
+  'gearLoop',
+  'timelineRail',
+  'flowNodes',
+  'brainDiagram',
+  'sodaCan',
+  'drinkCup',
+  'chartRadar',
+  'chip',
+  'networkGraph',
+  'genericBadge',
+]
+
 const CODE_PLAN_RESPONSE_FORMAT = {
   type: 'json_schema',
   json_schema: {
@@ -788,6 +819,160 @@ function withRuntimeSceneCSS(css) {
   return `${(css || '').trim()}\n\n${buildRuntimeSceneCSS()}`
 }
 
+function normalizeVisualObject(item) {
+  const type = typeof item === 'string' ? item : item?.type
+  const normalized = ALLOWED_VISUAL_OBJECTS.includes(type) ? type : 'genericBadge'
+  return {
+    type: normalized,
+    label: typeof item === 'object' && item?.label ? String(item.label).slice(0, 12) : normalized,
+  }
+}
+
+function localVisualDomain(text) {
+  if (/(可乐|饮料|汽水|百事|可口|品牌)/i.test(text)) return 'beverage_brand'
+  if (/(大学|学校|校园|学院|武科大|教育|学生|校徽)/i.test(text)) return 'university'
+  if (/(钢铁|冶金|高炉|钢水|耐火砖|材料|晶体|纳米)/i.test(text)) return 'steel_materials'
+  if (/(算法|代码|芯片|网络|数据|ai|人工智能)/i.test(text)) return 'technology'
+  return 'general'
+}
+
+function localHeroObjects(domain, text) {
+  if (domain === 'beverage_brand') return ['sodaCan', 'drinkCup']
+  if (domain === 'university' && /(钢铁|冶金|高炉|材料|耐火砖)/i.test(text)) return ['schoolGate', 'blastFurnace', 'book']
+  if (domain === 'university') return ['schoolGate', 'book', 'graduationCap']
+  if (domain === 'steel_materials') return ['blastFurnace', 'crystalLattice', 'gearLoop']
+  if (domain === 'technology') return ['chip', 'networkGraph', 'chartRadar']
+  return ['genericBadge', 'flowNodes']
+}
+
+function localSceneType(scene, index) {
+  return classifySceneType(scene, index)
+}
+
+function buildLocalVisualPlan(episode, storyboardData, timelineData) {
+  const storyboardScenes = Array.isArray(storyboardData?.scenes) ? storyboardData.scenes : []
+  const timelineScenes = Array.isArray(timelineData?.scenes) ? timelineData.scenes : []
+  const scenes = (timelineScenes.length ? timelineScenes : storyboardScenes).map((scene, index) => {
+    const storyScene = storyboardScenes.find((s) => s.id === scene.id) || storyboardScenes[index] || {}
+    const merged = { ...storyScene, ...scene }
+    const text = [episode.title, episode.keywords, merged.title, merged.visual, merged.intent, merged.animationHint].filter(Boolean).join(' ')
+    const visualDomain = localVisualDomain(text)
+    return {
+      id: merged.id || `scene-${String(index + 1).padStart(2, '0')}`,
+      sceneType: localSceneType(merged, index),
+      visualDomain,
+      palette: [],
+      heroObjects: localHeroObjects(visualDomain, text).map((type) => ({ type, label: type })),
+      supportingObjects: ['flowNodes'],
+      layout: index === 0 ? 'leftTextRightHero' : 'balancedDiagram',
+      motion: ['heroEnter', 'nodesPulse'],
+      avoidObjects: visualDomain === 'beverage_brand' ? [] : ['sodaCan', 'drinkCup'],
+    }
+  })
+  return { version: 1, source: 'local-fallback', scenes }
+}
+
+function validateVisualPlan(plan, expectedScenes = []) {
+  if (!plan || typeof plan !== 'object' || !Array.isArray(plan.scenes)) {
+    return { error: 'visualPlan.scenes must be an array' }
+  }
+
+  const expectedIds = expectedScenes.map((scene, index) => scene.id || `scene-${String(index + 1).padStart(2, '0')}`)
+  const scenes = expectedIds.map((id, index) => {
+    const scene = plan.scenes.find((item) => item?.id === id) || plan.scenes[index] || {}
+    const sceneType = ALLOWED_SCENE_TYPES.includes(scene.sceneType) ? scene.sceneType : null
+    if (!sceneType) return { __error: `${id}.sceneType is invalid` }
+    const heroObjects = Array.isArray(scene.heroObjects) ? scene.heroObjects.map(normalizeVisualObject) : []
+    return {
+      id,
+      sceneType,
+      visualDomain: typeof scene.visualDomain === 'string' ? scene.visualDomain.slice(0, 40) : 'general',
+      palette: Array.isArray(scene.palette) ? scene.palette.filter((value) => typeof value === 'string').slice(0, 4) : [],
+      heroObjects: heroObjects.length ? heroObjects.slice(0, 4) : [{ type: 'genericBadge', label: 'genericBadge' }],
+      supportingObjects: Array.isArray(scene.supportingObjects) ? scene.supportingObjects.map(normalizeVisualObject).slice(0, 4) : [],
+      layout: typeof scene.layout === 'string' ? scene.layout.slice(0, 40) : 'balancedDiagram',
+      motion: Array.isArray(scene.motion) ? scene.motion.filter((value) => typeof value === 'string').slice(0, 4) : [],
+      avoidObjects: Array.isArray(scene.avoidObjects) ? scene.avoidObjects.filter((value) => typeof value === 'string').slice(0, 6) : [],
+    }
+  })
+
+  const bad = scenes.find((scene) => scene.__error)
+  if (bad) return { error: bad.__error }
+  return { visualPlan: { version: 1, source: plan.source || 'api', scenes } }
+}
+
+async function generateVisualPlan(episode, storyboardData, timelineData, research) {
+  const timelineScenes = Array.isArray(timelineData?.scenes) ? timelineData.scenes : []
+  const localPlan = buildLocalVisualPlan(episode, storyboardData, timelineData)
+  const system = [
+    'You are a visual director for a Remotion educational video pipeline.',
+    'Return compact valid JSON only.',
+    'Choose scene types and visual objects from the allowed lists exactly.',
+    'Do not generate JSX, code, SVG, or prose.',
+  ].join(' ')
+  const user = `Topic: ${episode.title}
+Keywords: ${episode.keywords || 'none'}
+
+Allowed sceneType values:
+${ALLOWED_SCENE_TYPES.join(', ')}
+
+Allowed hero/supporting object type values:
+${ALLOWED_VISUAL_OBJECTS.join(', ')}
+
+Storyboard:
+${JSON.stringify(storyboardData, null, 2)}
+
+Timeline:
+${JSON.stringify(timelineData, null, 2)}
+
+Research excerpt:
+${String(research || '').slice(0, 3000)}
+
+Return:
+{
+  "version": 1,
+  "scenes": [
+    {
+      "id": "scene-01",
+      "sceneType": "openingHook",
+      "visualDomain": "short domain",
+      "palette": ["#hex"],
+      "heroObjects": [{"type": "schoolGate", "label": "校门"}],
+      "supportingObjects": [{"type": "flowNodes", "label": "流程"}],
+      "layout": "short layout",
+      "motion": ["short motion"],
+      "avoidObjects": ["sodaCan"]
+    }
+  ]
+}
+
+Rules:
+- Use the exact scene ids from Timeline.
+- For universities/schools, prefer schoolGate, book, graduationCap, labFlask.
+- For steel/metallurgy/materials, prefer blastFurnace, crystalLattice, gearLoop.
+- For beverages/cola/brand taste, prefer sodaCan, drinkCup.
+- Put sodaCan/drinkCup in avoidObjects unless the topic is beverage related.`
+
+  const result = await sendMessage(system, user, { maxTokens: 5000, temperature: 0.2 })
+  if (result.error) {
+    warn(`[Step2:VisualPlan] API failed, using local visual plan: ${result.error}`)
+    return localPlan
+  }
+
+  try {
+    const parsed = JSON.parse(stripCodeFence(result.text, 'json'))
+    const validated = validateVisualPlan(parsed, timelineScenes)
+    if (validated.error) {
+      warn(`[Step2:VisualPlan] API returned invalid visual plan, using local visual plan: ${validated.error}`)
+      return localPlan
+    }
+    return validated.visualPlan
+  } catch (err) {
+    warn(`[Step2:VisualPlan] API JSON parse failed, using local visual plan: ${err.message}`)
+    return localPlan
+  }
+}
+
 export const step2CodeInternals = {
   assembleHtmlDocument,
   buildSafeCSS,
@@ -801,6 +986,8 @@ export const step2CodeInternals = {
   validateGenerated,
   validateCodeBundle,
   tryRecoveredBundle,
+  buildLocalVisualPlan,
+  validateVisualPlan,
   withRuntimeSceneCSS,
 }
 
@@ -835,7 +1022,7 @@ function fallbackResult(episode, storyboard, timeline, dir, reason) {
   }
 }
 
-async function runRemotionCodeGen(episode, storyboardData, timelineData, dir) {
+async function runRemotionCodeGen(episode, storyboardData, timelineData, dir, research = '') {
   info(`[Step2:Remotion] Generating React components for "${episode.title}" (${episode.slug})`)
 
   try {
@@ -846,9 +1033,18 @@ async function runRemotionCodeGen(episode, storyboardData, timelineData, dir) {
       return { success: false, error: 'Timeline has no scenes' }
     }
 
+    const visualPlan = await generateVisualPlan(episode, storyboardData, timelineData, research)
+    writeText(`${dir}/visual-plan.json`, JSON.stringify(visualPlan, null, 2))
+
     const components = scenes.map((scene, index) => {
       const storyScene = storyboardScenes.find((s) => s.id === scene.id) || storyboardScenes[index] || {}
-      const merged = { ...storyScene, ...scene, duration: scene.duration || storyScene.duration || 5 }
+      const planScene = visualPlan.scenes.find((item) => item.id === scene.id) || visualPlan.scenes[index] || null
+      const merged = {
+        ...storyScene,
+        ...scene,
+        duration: scene.duration || storyScene.duration || 5,
+        visualPlan: planScene,
+      }
       return generateSceneComponent(merged, index)
     })
 
@@ -865,8 +1061,13 @@ async function runRemotionCodeGen(episode, storyboardData, timelineData, dir) {
     info(`[Step2:Remotion] Generated ${components.length} scene components for "${episode.title}"`)
     return {
       success: true,
-      output: { remotionDir, components: path.join(dir, 'remotion-components.json') },
-      codeContent: { remotionComponents: components, type: 'remotion' },
+      output: {
+        remotionDir,
+        components: path.join(dir, 'remotion-components.json'),
+        visualPlan: path.join(dir, 'visual-plan.json'),
+      },
+      codePlan: { visualPlan },
+      codeContent: { remotionComponents: components, visualPlan, type: 'remotion' },
     }
   } catch (err) {
     warn(`[Step2:Remotion] Failed: ${err.message} — falling back to Puppeteer`)
@@ -902,7 +1103,7 @@ export async function runStep2(episode) {
   const timeline = JSON.stringify(timelineData, null, 2)
 
   if (RENDER_ENGINE === 'remotion') {
-    return runRemotionCodeGen(episode, storyboardData, timelineData, dir)
+    return runRemotionCodeGen(episode, storyboardData, timelineData, dir, research)
   }
 
   info(`[Step2] Generating code plan for "${episode.title}" (${episode.slug})...`)

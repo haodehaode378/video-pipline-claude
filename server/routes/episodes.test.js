@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import { resolveWorkspacePath } from '../utils/file-helper.js'
 
 // The routes module has side effects (imports orchestrator, reads env).
 // We test the internal helper functions by extracting them or testing through HTTP.
@@ -182,5 +183,94 @@ describe('storyboard helpers', () => {
     expect(episode.steps.script).toBe('completed')
     expect(episode.steps.narration).toBe('pending')
     expect(episode.steps.mux).toBe('pending')
+  })
+
+  it('validates Remotion code payloads before saving', async () => {
+    const { validateCodeContent } = await import('./episodes.js')
+    const result = validateCodeContent({
+      remotionComponents: [
+        { id: 'scene-01', component: 'function SceneOne({ scene }) { return null }' },
+      ],
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.codeContent.type).toBe('remotion')
+  })
+
+  it('rejects malformed Remotion component code payloads', async () => {
+    const { validateCodeContent } = await import('./episodes.js')
+    const result = validateCodeContent({
+      type: 'remotion',
+      remotionComponents: [
+        { id: 'scene-01', component: '<AbsoluteFill />' },
+      ],
+    })
+
+    expect(result.error).toContain('function declaration')
+  })
+
+  it('recovers completed render artifacts after an interrupted process restart', async () => {
+    const { normalizeEpisode } = await import('./episodes.js')
+    const slug = 'normalize-recovery-test'
+    const episodeDir = resolveWorkspacePath(path.join('videos', slug))
+    const outDir = path.join(episodeDir, 'output')
+    const snapDir = path.join(episodeDir, 'snapshots')
+
+    fs.mkdirSync(outDir, { recursive: true })
+    fs.mkdirSync(snapDir, { recursive: true })
+    fs.writeFileSync(path.join(outDir, `episode-${slug}.mp4`), 'video')
+    fs.writeFileSync(path.join(outDir, `episode-${slug}-voiceover.mp4`), 'final')
+    fs.writeFileSync(path.join(snapDir, 'scene_00.png'), 'snap')
+
+    try {
+      const ep = normalizeEpisode({
+        slug,
+        title: 'Recovery',
+        status: 'running',
+        steps: {
+          code: 'completed',
+          snapshot: 'pending',
+          render: 'pending',
+          mux: 'pending',
+        },
+        storyboardContent: { scenes: [{ id: 'scene-01' }] },
+      })
+
+      expect(ep.steps.snapshot).toBe('completed')
+      expect(ep.steps.render).toBe('completed')
+      expect(ep.steps.mux).toBe('completed')
+      expect(ep.status).toBe('completed')
+      expect(ep.error).toBeNull()
+    } finally {
+      fs.rmSync(episodeDir, { recursive: true, force: true })
+    }
+  })
+
+  it('clears stale render artifacts after Remotion code edits', async () => {
+    const { clearGeneratedRenderArtifacts } = await import('./episodes.js')
+    const slug = 'clear-render-artifacts-test'
+    const episodeDir = resolveWorkspacePath(path.join('videos', slug))
+    const outDir = path.join(episodeDir, 'output')
+    const snapDir = path.join(episodeDir, 'snapshots')
+
+    fs.mkdirSync(outDir, { recursive: true })
+    fs.mkdirSync(snapDir, { recursive: true })
+    fs.writeFileSync(path.join(outDir, `episode-${slug}.mp4`), 'video')
+    fs.writeFileSync(path.join(outDir, `episode-${slug}-voiceover.mp4`), 'final')
+    fs.writeFileSync(path.join(episodeDir, `episode-${slug}.srt`), 'subtitle')
+    fs.writeFileSync(path.join(snapDir, 'scene_00.png'), 'snap')
+    fs.writeFileSync(path.join(snapDir, 'keep.txt'), 'keep')
+
+    try {
+      clearGeneratedRenderArtifacts({ slug })
+
+      expect(fs.existsSync(path.join(outDir, `episode-${slug}.mp4`))).toBe(false)
+      expect(fs.existsSync(path.join(outDir, `episode-${slug}-voiceover.mp4`))).toBe(false)
+      expect(fs.existsSync(path.join(episodeDir, `episode-${slug}.srt`))).toBe(false)
+      expect(fs.existsSync(path.join(snapDir, 'scene_00.png'))).toBe(false)
+      expect(fs.existsSync(path.join(snapDir, 'keep.txt'))).toBe(true)
+    } finally {
+      fs.rmSync(episodeDir, { recursive: true, force: true })
+    }
   })
 })

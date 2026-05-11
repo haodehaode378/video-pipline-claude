@@ -1,7 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { resolveWorkspacePath } from './file-helper.js'
 
-const LOG_FILE = path.resolve('server.log')
+function getLogFile() {
+  return process.env.LOG_FILE_PATH
+    ? resolveWorkspacePath(process.env.LOG_FILE_PATH)
+    : resolveWorkspacePath('server.log')
+}
 
 function timestamp() {
   return new Date().toISOString().replace('T', ' ').replace('Z', '')
@@ -10,7 +15,9 @@ function timestamp() {
 function writeLine(level, message) {
   const line = `[${timestamp()}] [${level.toUpperCase()}] ${message}\n`
   try {
-    fs.appendFileSync(LOG_FILE, line)
+    const logFile = getLogFile()
+    fs.mkdirSync(path.dirname(logFile), { recursive: true })
+    fs.appendFileSync(logFile, line)
   } catch {
     // Logging must never break the pipeline.
   }
@@ -33,8 +40,9 @@ export function error(msg) {
 
 export function readLogs(limit = 100) {
   try {
-    if (!fs.existsSync(LOG_FILE)) return []
-    const content = fs.readFileSync(LOG_FILE, 'utf-8')
+    const logFile = getLogFile()
+    if (!fs.existsSync(logFile)) return []
+    const content = fs.readFileSync(logFile, 'utf-8')
     const lines = content.trim().split('\n')
     return lines.slice(-limit)
   } catch {

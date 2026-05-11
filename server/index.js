@@ -1,4 +1,4 @@
-import 'dotenv/config'
+import './utils/load-env.js'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import http from 'node:http'
@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '5mb' }))
 
 // Serve generated video files
 app.use('/videos', express.static(path.join(__dirname, '..', 'videos')))

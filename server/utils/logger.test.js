@@ -2,25 +2,22 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { info, warn, error, readLogs } from './logger.js'
+import { resolveWorkspacePath } from './file-helper.js'
 
-const LOG_FILE = path.resolve('server.log')
-
-// Save original log file state
-let backup = null
+const LOG_FILE = resolveWorkspacePath('test-tmp/logger/server.log')
+const ORIGINAL_CWD = process.cwd()
 
 beforeEach(() => {
+  process.env.LOG_FILE_PATH = 'test-tmp/logger/server.log'
   if (fs.existsSync(LOG_FILE)) {
-    backup = fs.readFileSync(LOG_FILE, 'utf-8')
     fs.unlinkSync(LOG_FILE)
   }
 })
 
 afterEach(() => {
+  process.chdir(ORIGINAL_CWD)
   if (fs.existsSync(LOG_FILE)) fs.unlinkSync(LOG_FILE)
-  if (backup) {
-    fs.writeFileSync(LOG_FILE, backup)
-    backup = null
-  }
+  delete process.env.LOG_FILE_PATH
 })
 
 describe('logger', () => {
@@ -59,6 +56,20 @@ describe('logger', () => {
     const logs = readLogs(3)
     expect(logs.length).toBeLessThanOrEqual(3)
     expect(logs[logs.length - 1]).toContain('msg 9')
+  })
+
+  it('writes logs relative to the project root, not process cwd', () => {
+    const outsideCwd = fs.mkdtempSync(path.join(path.dirname(resolveWorkspacePath('test-tmp')), 'logger-cwd-check-'))
+
+    process.chdir(outsideCwd)
+    info('cwd independent')
+
+    expect(fs.existsSync(LOG_FILE)).toBe(true)
+    expect(fs.existsSync(path.join(outsideCwd, 'server.log'))).toBe(false)
+    expect(readLogs(1)[0]).toContain('cwd independent')
+
+    process.chdir(ORIGINAL_CWD)
+    fs.rmSync(outsideCwd, { recursive: true, force: true })
   })
 
   it('logs have timestamp format', () => {

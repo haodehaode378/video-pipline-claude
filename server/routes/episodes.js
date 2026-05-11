@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
-import { getEpisodeDir, getScriptDir, readJSON, writeJSON, writeText } from '../utils/file-helper.js'
+import { getEpisodeDir, getScriptDir, readJSON, resolveWorkspacePath, writeJSON, writeText } from '../utils/file-helper.js'
 import { startPipeline, stepOrder } from '../pipeline/orchestrator.js'
 import { readLogs, error } from '../utils/logger.js'
+import { bootstrapRemotionProject } from '../render/remotion-bundle.js'
 
 const STYLE_CONFIG_PATH = 'data/style-config.json'
 
@@ -76,19 +77,27 @@ function normalizeEpisode(episode) {
   const silentVideoPath = path.join(episodeDir, 'output', `episode-${episode.slug}.mp4`)
   const finalVideoPath = path.join(episodeDir, 'output', `episode-${episode.slug}-voiceover.mp4`)
 
-  if (expectedSceneCount > 0 && snapshotCount >= expectedSceneCount && steps.snapshot === 'running') {
+  if (expectedSceneCount > 0 && snapshotCount >= expectedSceneCount && steps.snapshot !== 'completed') {
     steps.snapshot = 'completed'
   }
-  if (fs.existsSync(silentVideoPath) && steps.render === 'running') {
+  if (fs.existsSync(silentVideoPath) && steps.render !== 'completed') {
     steps.render = 'completed'
   }
-  if (fs.existsSync(finalVideoPath) && steps.mux === 'running') {
+  if (fs.existsSync(finalVideoPath) && steps.mux !== 'completed') {
     steps.mux = 'completed'
   }
   const hasRunningStep = Object.values(steps).includes('running')
   if (episode.status === 'running' && !hasRunningStep) {
-    episode.status = steps.mux === 'completed' ? 'completed' : 'failed'
-    episode.error ||= '流水线被中断，请从未完成步骤重跑。'
+    if (steps.mux === 'completed') {
+      episode.status = 'completed'
+      episode.error = null
+    } else {
+      episode.status = 'failed'
+      episode.error ||= '流水线被中断，请从未完成步骤重跑。'
+    }
+  } else if (steps.mux === 'completed' && episode.status !== 'completed') {
+    episode.status = 'completed'
+    episode.error = null
   }
 
   const legacyFallbackDetected =
@@ -325,19 +334,84 @@ router.put('/:slug/research-brief', (req, res) => {
   res.json(episode)
 })
 
-router.put('/:slug/code', (req, res) => {
+function validateCodeContent(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { error: 'code payload must be an object' }
+  }
+
+  const isRemotion = payload.type === 'remotion' || Array.isArray(payload.remotionComponents)
+  if (!isRemotion) return { codeContent: payload }
+
+  if (!Array.isArray(payload.remotionComponents) || payload.remotionComponents.length === 0) {
+    return { error: 'remotionComponents must be a non-empty array' }
+  }
+
+  for (let i = 0; i < payload.remotionComponents.length; i++) {
+    const component = payload.remotionComponents[i]
+    if (!component || typeof component !== 'object' || Array.isArray(component)) {
+      return { error: `remotionComponents[${i}] must be an object` }
+    }
+    if (typeof component.component !== 'string' || !component.component.trim()) {
+      return { error: `remotionComponents[${i}].component is required` }
+    }
+    if (!/^function\s+\w+\s*\(/.test(component.component.trim())) {
+      return { error: `remotionComponents[${i}].component must start with a function declaration` }
+    }
+  }
+
+  return {
+    codeContent: {
+      ...payload,
+      type: 'remotion',
+    },
+  }
+}
+
+function removeIfExists(filePath) {
+  if (fs.existsSync(filePath)) fs.rmSync(filePath, { force: true })
+}
+
+function clearGeneratedRenderArtifacts(episode) {
+  const episodeDir = getEpisodeDir(episode.slug)
+  const snapshotDir = path.join(episodeDir, 'snapshots')
+  if (fs.existsSync(snapshotDir)) {
+    for (const name of fs.readdirSync(snapshotDir)) {
+      if (/^scene_\d+\.png$/i.test(name)) removeIfExists(path.join(snapshotDir, name))
+    }
+  }
+
+  const outputDir = path.join(episodeDir, 'output')
+  removeIfExists(path.join(outputDir, `episode-${episode.slug}.mp4`))
+  removeIfExists(path.join(outputDir, `episode-${episode.slug}-voiceover.mp4`))
+  removeIfExists(path.join(episodeDir, `episode-${episode.slug}.srt`))
+}
+
+router.put('/:slug/code', async (req, res) => {
   const { episodes, episode } = findEpisode(req.params.slug)
   if (!episode) return res.status(404).json({ error: 'not found' })
 
-  episode.codeContent = req.body
+  const result = validateCodeContent(req.body)
+  if (result.error) return res.status(400).json({ error: result.error })
+
+  episode.codeContent = result.codeContent
   episode.updatedAt = new Date().toISOString()
+  if (Array.isArray(result.codeContent.remotionComponents)) {
+    const episodeDir = getEpisodeDir(episode.slug)
+    const remotionDir = path.join(episodeDir, 'remotion')
+    await bootstrapRemotionProject(episode.slug, result.codeContent.remotionComponents, remotionDir)
+    writeText(path.join(episodeDir, 'remotion-components.json'), JSON.stringify(result.codeContent.remotionComponents, null, 2))
+    clearGeneratedRenderArtifacts(episode)
+    resetStepsAfter(episode, 'snapshot')
+    episode.status = 'code_ready'
+    episode.error = null
+  }
   writeEpisodes(episodes)
   res.json(episode)
 })
 
 router.get('/:slug/download', (req, res) => {
   const { slug } = req.params
-  const filePath = path.resolve('videos', slug, 'output', `episode-${slug}-voiceover.mp4`)
+  const filePath = resolveWorkspacePath(path.join('videos', slug, 'output', `episode-${slug}-voiceover.mp4`))
 
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'Video not ready yet' })
@@ -370,4 +444,4 @@ router.post('/:slug/retry', async (req, res) => {
 })
 
 export default router
-export { resetStepsAfter, storyboardToMarkdown, validateStoryboardPayload }
+export { clearGeneratedRenderArtifacts, normalizeEpisode, resetStepsAfter, storyboardToMarkdown, validateCodeContent, validateStoryboardPayload }
