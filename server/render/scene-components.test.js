@@ -164,6 +164,34 @@ describe('Remotion scene components', () => {
     expect(component.component).not.toContain('{side.objectType}')
   })
 
+  it.each([
+    ['citySkyline', 'topic-object citySkyline'],
+    ['moneyStack', 'topic-object moneyStack'],
+    ['leafEnergy', 'topic-object leafEnergy'],
+    ['rocket', 'topic-object rocket'],
+    ['vehicle', 'topic-object vehicle'],
+    ['filmFrame', 'topic-object filmFrame'],
+    ['sportsCourt', 'topic-object sportsCourt'],
+    ['medicalCross', 'topic-object medicalCross'],
+    ['factory', 'topic-object factory'],
+    ['shoppingBag', 'topic-object shoppingBag'],
+  ])('renders %s as a concrete topic object', (objectType, marker) => {
+    const scene = {
+      id: 'scene-01',
+      title: `${objectType} topic`,
+      visual: '主题视觉对象入场',
+      narration: '对应主题应该生成真实图形。',
+      visualPlan: {
+        sceneType: 'openingHook',
+        heroObjects: [{ type: objectType, label: objectType }],
+      },
+    }
+
+    const component = generateSceneComponent(scene, 0)
+    expect(component.component).toContain(marker)
+    expect(component.component).not.toContain('soda-can')
+  })
+
   it('classifies closed-loop chain scenes as process flow before experiment', () => {
     const scene = {
       id: 'scene-02',

@@ -137,6 +137,25 @@ function chipObject(color, delay) {
           </div>`
 }
 
+function simpleIconObject(type, color, delay) {
+  const shape = {
+    citySkyline: `<div style={{ display: 'flex', alignItems: 'end', gap: 12, height: 180 }}>{[88,132,108,164,122].map((h,i)=><div key={i} style={{ width: 34, height: h, borderRadius: '10px 10px 0 0', background: i % 2 ? ${color} : '#f8fafc' }} />)}</div>`,
+    moneyStack: `<div style={{ position: 'relative', width: 210, height: 150 }}>{[0,1,2].map((i)=><div key={i} style={{ position: 'absolute', left: i * 18, top: i * 22, width: 150, height: 78, borderRadius: 14, background: i % 2 ? ${color} : '#f8fafc', boxShadow: '0 18px 34px rgba(0,0,0,0.28)' }} />)}<div style={{ position: 'absolute', right: 0, bottom: 0, width: 76, height: 76, borderRadius: 999, background: ${color}, border: '8px solid #f8fafc' }} /></div>`,
+    leafEnergy: `<div style={{ position: 'relative', width: 210, height: 190 }}><div style={{ position: 'absolute', left: 26, top: 30, width: 138, height: 110, borderRadius: '100% 0 100% 0', background: ${color}, transform: 'rotate(-18deg)', boxShadow: '0 0 38px rgba(34,197,94,0.34)' }} /><div style={{ position: 'absolute', left: 92, top: 48, width: 14, height: 130, borderRadius: 999, background: '#f8fafc', transform: 'rotate(35deg)' }} /><div style={{ position: 'absolute', right: 12, bottom: 12, width: 70, height: 70, borderRadius: 999, border: '12px solid #f8fafc', borderTopColor: ${color} }} /></div>`,
+    rocket: `<div style={{ position: 'relative', width: 170, height: 250, transform: 'rotate(-18deg)' }}><div style={{ position: 'absolute', left: 46, top: 0, width: 78, height: 178, borderRadius: '60px 60px 24px 24px', background: 'linear-gradient(#f8fafc, ' + ${color} + ')' }} /><div style={{ position: 'absolute', left: 70, top: 48, width: 32, height: 32, borderRadius: 999, background: '#0f172a' }} /><div style={{ position: 'absolute', left: 18, top: 126, width: 42, height: 70, clipPath: 'polygon(100% 0, 100% 100%, 0 100%)', background: ${color} }} /><div style={{ position: 'absolute', right: 18, top: 126, width: 42, height: 70, clipPath: 'polygon(0 0, 100% 100%, 0 100%)', background: ${color} }} /><div style={{ position: 'absolute', left: 64, bottom: 0, width: 42, height: 72, borderRadius: '0 0 999px 999px', background: '#fb923c', transform: 'scaleY(' + (0.8 + pulse * 0.35) + ')' }} /></div>`,
+    vehicle: `<div style={{ position: 'relative', width: 250, height: 150 }}><div style={{ position: 'absolute', left: 30, right: 30, top: 46, height: 58, borderRadius: 24, background: ${color} }} /><div style={{ position: 'absolute', left: 78, top: 18, width: 94, height: 54, borderRadius: '28px 28px 8px 8px', background: '#f8fafc' }} /><div style={{ position: 'absolute', left: 52, bottom: 16, width: 44, height: 44, borderRadius: 999, background: '#0f172a', border: '8px solid #f8fafc' }} /><div style={{ position: 'absolute', right: 52, bottom: 16, width: 44, height: 44, borderRadius: 999, background: '#0f172a', border: '8px solid #f8fafc' }} /></div>`,
+    filmFrame: `<div style={{ width: 230, height: 160, borderRadius: 18, border: '14px solid ' + ${color}, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: 14, background: '#0f172a' }}>{[0,1,2].map((i)=><div key={i} style={{ borderRadius: 8, background: i % 2 ? '#f8fafc' : ${color}, opacity: 0.86 }} />)}</div>`,
+    sportsCourt: `<div style={{ width: 250, height: 170, borderRadius: 20, border: '8px solid #f8fafc', background: ${color}, position: 'relative' }}><div style={{ position: 'absolute', left: '50%', top: 0, bottom: 0, width: 6, background: '#f8fafc' }} /><div style={{ position: 'absolute', left: 88, top: 48, width: 72, height: 72, borderRadius: 999, border: '6px solid #f8fafc' }} /></div>`,
+    medicalCross: `<div style={{ width: 210, height: 210, position: 'relative' }}><div style={{ position: 'absolute', left: 74, top: 18, width: 62, height: 174, borderRadius: 18, background: ${color} }} /><div style={{ position: 'absolute', left: 18, top: 74, width: 174, height: 62, borderRadius: 18, background: ${color} }} /><div style={{ position: 'absolute', inset: 28, borderRadius: 999, border: '3px solid rgba(255,255,255,0.34)' }} /></div>`,
+    factory: `<div style={{ position: 'relative', width: 250, height: 190 }}><div style={{ position: 'absolute', left: 16, right: 16, bottom: 20, height: 96, borderRadius: 18, background: ${color} }} /><div style={{ position: 'absolute', left: 28, top: 42, width: 40, height: 100, borderRadius: '12px 12px 0 0', background: '#f8fafc' }} /><div style={{ position: 'absolute', right: 40, top: 16, width: 36, height: 126, borderRadius: '12px 12px 0 0', background: '#f8fafc' }} /><div style={{ position: 'absolute', left: 104, bottom: 58, width: 104, height: 42, clipPath: 'polygon(0 100%, 22% 30%, 44% 100%, 66% 30%, 88% 100%)', background: '#0f172a', opacity: 0.34 }} /></div>`,
+    shoppingBag: `<div style={{ position: 'relative', width: 190, height: 210, borderRadius: '22px 22px 30px 30px', background: ${color}, boxShadow: '0 28px 58px rgba(0,0,0,0.32)' }}><div style={{ position: 'absolute', left: 48, top: 36, width: 94, height: 58, borderRadius: '999px 999px 0 0', border: '10px solid #f8fafc', borderBottom: 0 }} /><div style={{ position: 'absolute', left: 38, right: 38, bottom: 46, height: 12, borderRadius: 999, background: '#f8fafc' }} /></div>`,
+  }[type] || ''
+
+  return `          <div className="topic-object ${type}" style={{ width: 280, height: 260, display: 'grid', placeItems: 'center', transform: 'translateY(' + (28 - Math.max(0, enter - ${delay}) * 46) + 'px) scale(' + (0.88 + Math.max(0, enter - ${delay}) * 0.12) + ')', opacity: Math.min(1, Math.max(0, enter - ${delay}) * 2.4) }}>
+            ${shape}
+          </div>`
+}
+
 function topicObject(type, color = "'#2563eb'", delay = 0) {
   switch (type) {
     case 'schoolGate': return schoolGate(color, delay)
@@ -147,6 +166,16 @@ function topicObject(type, color = "'#2563eb'", delay = 0) {
     case 'headphones': return headphonesObject(color, delay)
     case 'audioWaves': return audioWavesObject(color, delay)
     case 'chip': return chipObject(color, delay)
+    case 'citySkyline':
+    case 'moneyStack':
+    case 'leafEnergy':
+    case 'rocket':
+    case 'vehicle':
+    case 'filmFrame':
+    case 'sportsCourt':
+    case 'medicalCross':
+    case 'factory':
+    case 'shoppingBag': return simpleIconObject(type, color, delay)
     case 'sodaCan': return sodaCan('badge', '#2563eb', delay)
     case 'drinkCup': return sodaCan('letter', '#ef4444', delay)
     default: return symbolBadge()

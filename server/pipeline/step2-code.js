@@ -41,6 +41,16 @@ const ALLOWED_VISUAL_OBJECTS = [
   'networkGraph',
   'headphones',
   'audioWaves',
+  'citySkyline',
+  'moneyStack',
+  'leafEnergy',
+  'rocket',
+  'vehicle',
+  'filmFrame',
+  'sportsCourt',
+  'medicalCross',
+  'factory',
+  'shoppingBag',
   'genericBadge',
 ]
 
@@ -835,6 +845,14 @@ function localVisualDomain(text) {
   if (/(蓝牙|耳机|耳塞|音频|降噪|声学|无线|手机|穿戴|消费电子|数码|充电盒)/i.test(text)) return 'consumer_electronics'
   if (/(大学|学校|校园|学院|武科大|教育|学生|校徽)/i.test(text)) return 'university'
   if (/(钢铁|冶金|高炉|钢水|耐火砖|材料|晶体|纳米)/i.test(text)) return 'steel_materials'
+  if (/(医疗|医院|医生|药物|健康|疾病|诊断|细胞|基因|疫苗)/i.test(text)) return 'healthcare'
+  if (/(金融|股票|基金|银行|投资|消费|价格|经济|市场|利润|商业模式)/i.test(text)) return 'finance_business'
+  if (/(城市|武汉|北京|上海|旅游|景区|地铁|建筑|街区|地标)/i.test(text)) return 'city_travel'
+  if (/(能源|电池|新能源|光伏|风电|碳中和|电力|环保|气候)/i.test(text)) return 'energy_environment'
+  if (/(汽车|飞机|高铁|火车|交通|出行|物流|航天|火箭|卫星)/i.test(text)) return 'transport_space'
+  if (/(体育|足球|篮球|比赛|运动员|训练|冠军|球场|赛事)/i.test(text)) return 'sports'
+  if (/(电影|音乐|游戏|文学|艺术|历史|文化|博物馆|故事|人物)/i.test(text)) return 'culture_media'
+  if (/(公司|品牌|营销|零售|电商|产品|用户|增长|门店|供应链)/i.test(text)) return 'business_brand'
   if (/(算法|代码|芯片|网络|数据|ai|人工智能)/i.test(text)) return 'technology'
   return 'general'
 }
@@ -845,6 +863,14 @@ function localHeroObjects(domain, text) {
   if (domain === 'university' && /(钢铁|冶金|高炉|材料|耐火砖)/i.test(text)) return ['schoolGate', 'blastFurnace', 'book']
   if (domain === 'university') return ['schoolGate', 'book', 'graduationCap']
   if (domain === 'steel_materials') return ['blastFurnace', 'crystalLattice', 'gearLoop']
+  if (domain === 'healthcare') return ['medicalCross', 'brainDiagram', 'flowNodes']
+  if (domain === 'finance_business') return ['moneyStack', 'chartRadar', 'flowNodes']
+  if (domain === 'city_travel') return ['citySkyline', 'timelineRail', 'flowNodes']
+  if (domain === 'energy_environment') return ['leafEnergy', 'gearLoop', 'chartRadar']
+  if (domain === 'transport_space') return /(航天|火箭|卫星)/i.test(text) ? ['rocket', 'networkGraph', 'chartRadar'] : ['vehicle', 'flowNodes', 'chartRadar']
+  if (domain === 'sports') return ['sportsCourt', 'chartRadar', 'flowNodes']
+  if (domain === 'culture_media') return ['filmFrame', 'timelineRail', 'genericBadge']
+  if (domain === 'business_brand') return ['shoppingBag', 'chartRadar', 'flowNodes']
   if (domain === 'technology') return ['chip', 'networkGraph', 'chartRadar']
   return ['genericBadge', 'flowNodes']
 }
@@ -886,7 +912,12 @@ function validateVisualPlan(plan, expectedScenes = []) {
     const scene = plan.scenes.find((item) => item?.id === id) || plan.scenes[index] || {}
     const sceneType = ALLOWED_SCENE_TYPES.includes(scene.sceneType) ? scene.sceneType : null
     if (!sceneType) return { __error: `${id}.sceneType is invalid` }
-    const heroObjects = Array.isArray(scene.heroObjects) ? scene.heroObjects.map(normalizeVisualObject) : []
+    const avoidObjects = Array.isArray(scene.avoidObjects) ? scene.avoidObjects.filter((value) => typeof value === 'string').slice(0, 6) : []
+    let heroObjects = Array.isArray(scene.heroObjects) ? scene.heroObjects.map(normalizeVisualObject) : []
+    heroObjects = heroObjects.filter((item) => !avoidObjects.includes(item.type))
+    if (scene.visualDomain !== 'beverage_brand') {
+      heroObjects = heroObjects.filter((item) => !['sodaCan', 'drinkCup'].includes(item.type))
+    }
     return {
       id,
       sceneType,
@@ -896,7 +927,7 @@ function validateVisualPlan(plan, expectedScenes = []) {
       supportingObjects: Array.isArray(scene.supportingObjects) ? scene.supportingObjects.map(normalizeVisualObject).slice(0, 4) : [],
       layout: typeof scene.layout === 'string' ? scene.layout.slice(0, 40) : 'balancedDiagram',
       motion: Array.isArray(scene.motion) ? scene.motion.filter((value) => typeof value === 'string').slice(0, 4) : [],
-      avoidObjects: Array.isArray(scene.avoidObjects) ? scene.avoidObjects.filter((value) => typeof value === 'string').slice(0, 6) : [],
+      avoidObjects,
     }
   })
 
@@ -955,6 +986,14 @@ Rules:
 - For universities/schools, prefer schoolGate, book, graduationCap, labFlask.
 - For steel/metallurgy/materials, prefer blastFurnace, crystalLattice, gearLoop.
 - For bluetooth/headphones/audio/consumer electronics, prefer headphones, audioWaves, chip, networkGraph.
+- For healthcare/medicine, prefer medicalCross, brainDiagram, flowNodes.
+- For finance/business/economics, prefer moneyStack, chartRadar, flowNodes.
+- For cities/travel/places, prefer citySkyline, timelineRail, flowNodes.
+- For energy/environment, prefer leafEnergy, gearLoop, chartRadar.
+- For transport/space, prefer vehicle or rocket, plus networkGraph or chartRadar.
+- For sports, prefer sportsCourt, chartRadar, flowNodes.
+- For culture/media/history, prefer filmFrame, timelineRail, genericBadge.
+- For retail/product/brand topics that are not drinks, prefer shoppingBag, chartRadar, flowNodes.
 - For beverages/cola/soft drinks only, prefer sodaCan, drinkCup.
 - Never treat the generic word "brand" as beverage-related by itself.
 - Put sodaCan/drinkCup in avoidObjects unless the topic is beverage related.`

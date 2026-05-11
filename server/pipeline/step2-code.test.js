@@ -324,6 +324,47 @@ window.__hfSeek = function() {};
     expect(scene.heroObjects.map((item) => item.type)).not.toContain('drinkCup')
   })
 
+  it.each([
+    ['城市旅游', '武汉城市旅游和地铁街区', 'city_travel', ['citySkyline', 'timelineRail', 'flowNodes']],
+    ['医疗健康', '医院医生如何做疾病诊断', 'healthcare', ['medicalCross', 'brainDiagram', 'flowNodes']],
+    ['金融商业', '股票市场和银行利润为什么波动', 'finance_business', ['moneyStack', 'chartRadar', 'flowNodes']],
+    ['能源环保', '新能源电池和碳中和', 'energy_environment', ['leafEnergy', 'gearLoop', 'chartRadar']],
+    ['体育赛事', '篮球比赛冠军训练方法', 'sports', ['sportsCourt', 'chartRadar', 'flowNodes']],
+    ['文化影视', '电影音乐和历史文化故事', 'culture_media', ['filmFrame', 'timelineRail', 'genericBadge']],
+    ['非饮料品牌', '服装品牌如何做门店增长', 'business_brand', ['shoppingBag', 'chartRadar', 'flowNodes']],
+  ])('builds richer visual plan for %s topics', (_label, title, domain, objects) => {
+    const plan = buildLocalVisualPlan(
+      { title, keywords: title },
+      { scenes: [{ id: 'scene-01', title, visual: title }] },
+      { scenes: [{ id: 'scene-01', start: 0, duration: 6 }] },
+    )
+
+    expect(plan.scenes[0].visualDomain).toBe(domain)
+    expect(plan.scenes[0].heroObjects.map((item) => item.type)).toEqual(objects)
+    expect(plan.scenes[0].heroObjects.map((item) => item.type)).not.toContain('sodaCan')
+  })
+
+  it('filters avoided or off-domain beverage objects from API visual plans', () => {
+    const result = validateVisualPlan(
+      {
+        scenes: [{
+          id: 'scene-01',
+          sceneType: 'openingHook',
+          visualDomain: 'business_brand',
+          heroObjects: [
+            { type: 'sodaCan', label: 'wrong' },
+            { type: 'shoppingBag', label: 'retail' },
+          ],
+          avoidObjects: ['sodaCan', 'drinkCup'],
+        }],
+      },
+      [{ id: 'scene-01' }],
+    )
+
+    expect(result.error).toBeUndefined()
+    expect(result.visualPlan.scenes[0].heroObjects.map((item) => item.type)).toEqual(['shoppingBag'])
+  })
+
   it('validates API visual plans and clamps unknown visual objects', () => {
     const expectedScenes = [{ id: 'scene-01' }]
     const valid = validateVisualPlan(
