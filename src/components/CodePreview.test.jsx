@@ -10,12 +10,21 @@ describe('CodePreview', () => {
     global.fetch = originalFetch
   })
 
-  it('renders Remotion scene components', () => {
+  it('renders Remotion scene components with visual plan context', () => {
     render(
       <CodePreview
         slug="demo"
         code={{
           type: 'remotion',
+          visualPlan: {
+            scenes: [{
+              id: 'scene-01',
+              sceneType: 'openingHook',
+              visualDomain: 'consumer_electronics',
+              heroObjects: [{ type: 'headphones' }, { type: 'audioWaves' }],
+              avoidObjects: ['sodaCan', 'drinkCup'],
+            }],
+          },
           remotionComponents: [
             { id: 'scene-01', component: 'function SceneOne() { return <AbsoluteFill /> }' },
           ],
@@ -23,11 +32,39 @@ describe('CodePreview', () => {
       />,
     )
 
-    expect(screen.getByText('scene-01')).toBeTruthy()
+    expect(screen.getByText('视觉方案')).toBeTruthy()
+    expect(screen.getByText('scene-01 · openingHook · headphones')).toBeTruthy()
+    expect(screen.getByText('consumer_electronics')).toBeTruthy()
+    expect(screen.getByText('headphones, audioWaves')).toBeTruthy()
+    expect(screen.getByText('avoid: sodaCan, drinkCup')).toBeTruthy()
     expect(screen.getByDisplayValue('function SceneOne() { return <AbsoluteFill /> }')).toBeTruthy()
   })
 
-  it('saves Remotion code with an encoded slug and backend response', async () => {
+  it('selects the matching component when a visual plan card is clicked', () => {
+    render(
+      <CodePreview
+        slug="demo"
+        code={{
+          type: 'remotion',
+          visualPlan: {
+            scenes: [
+              { id: 'scene-01', sceneType: 'openingHook', heroObjects: [{ type: 'headphones' }] },
+              { id: 'scene-02', sceneType: 'comparison', heroObjects: [{ type: 'chip' }] },
+            ],
+          },
+          remotionComponents: [
+            { id: 'scene-01', component: 'function SceneOne() { return null }' },
+            { id: 'scene-02', component: 'function SceneTwo() { return null }' },
+          ],
+        }}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('scene-02'))
+    expect(screen.getByDisplayValue('function SceneTwo() { return null }')).toBeTruthy()
+  })
+
+  it('saves Remotion code with an encoded slug, visual plan, and backend response', async () => {
     const onSaved = vi.fn()
     global.fetch = vi.fn(async () => ({
       ok: true,
@@ -35,6 +72,9 @@ describe('CodePreview', () => {
         slug: '武汉科技大学-mp0m08ml',
         codeContent: {
           type: 'remotion',
+          visualPlan: {
+            scenes: [{ id: 'scene-01', sceneType: 'openingHook', heroObjects: [{ type: 'schoolGate' }] }],
+          },
           remotionComponents: [
             { id: 'scene-01', component: 'function SceneOne() { return null }' },
           ],
@@ -47,6 +87,9 @@ describe('CodePreview', () => {
         slug="武汉科技大学-mp0m08ml"
         code={{
           type: 'remotion',
+          visualPlan: {
+            scenes: [{ id: 'scene-01', sceneType: 'openingHook', heroObjects: [{ type: 'schoolGate' }] }],
+          },
           remotionComponents: [
             { id: 'scene-01', component: 'function SceneOne() { return <AbsoluteFill /> }' },
           ],
@@ -62,7 +105,10 @@ describe('CodePreview', () => {
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     expect(global.fetch.mock.calls[0][0]).toBe('/api/episodes/%E6%AD%A6%E6%B1%89%E7%A7%91%E6%8A%80%E5%A4%A7%E5%AD%A6-mp0m08ml/code')
-    expect(JSON.parse(global.fetch.mock.calls[0][1].body).remotionComponents[0].component).toBe('function SceneOne() { return null }')
+
+    const body = JSON.parse(global.fetch.mock.calls[0][1].body)
+    expect(body.remotionComponents[0].component).toBe('function SceneOne() { return null }')
+    expect(body.visualPlan.scenes[0].heroObjects[0].type).toBe('schoolGate')
     expect(onSaved).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'remotion' }),
       expect.objectContaining({ slug: '武汉科技大学-mp0m08ml' }),
