@@ -14,12 +14,14 @@ test-results/
 # Runtime data
 data/episodes.json
 server.log
+chrome-headless-shell-win64/
 
 # Generated output
 videos/*
 scripts/*
 !videos/.gitkeep
 !scripts/.gitkeep
+!scripts/ensure-remotion-browser.js
 
 # OS files
 .DS_Store

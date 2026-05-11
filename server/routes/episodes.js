@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import path from 'node:path'
 import fs from 'node:fs'
-import { getScriptDir, readJSON, writeJSON, writeText } from '../utils/file-helper.js'
+import { getEpisodeDir, getScriptDir, readJSON, writeJSON, writeText } from '../utils/file-helper.js'
 import { startPipeline, stepOrder } from '../pipeline/orchestrator.js'
 import { readLogs, error } from '../utils/logger.js'
 
@@ -64,6 +64,33 @@ function normalizeEpisode(episode) {
   if (!episode.steps?.timeline && episode.steps?.mux === 'completed') {
     steps.timeline = 'completed'
   }
+
+  const episodeDir = getEpisodeDir(episode.slug)
+  const expectedSceneCount = episode.storyboardContent?.scenes?.length
+    || episode.codeContent?.remotionComponents?.length
+    || 0
+  const snapshotDir = path.join(episodeDir, 'snapshots')
+  const snapshotCount = fs.existsSync(snapshotDir)
+    ? fs.readdirSync(snapshotDir).filter((name) => /^scene_\d+\.png$/i.test(name)).length
+    : 0
+  const silentVideoPath = path.join(episodeDir, 'output', `episode-${episode.slug}.mp4`)
+  const finalVideoPath = path.join(episodeDir, 'output', `episode-${episode.slug}-voiceover.mp4`)
+
+  if (expectedSceneCount > 0 && snapshotCount >= expectedSceneCount && steps.snapshot === 'running') {
+    steps.snapshot = 'completed'
+  }
+  if (fs.existsSync(silentVideoPath) && steps.render === 'running') {
+    steps.render = 'completed'
+  }
+  if (fs.existsSync(finalVideoPath) && steps.mux === 'running') {
+    steps.mux = 'completed'
+  }
+  const hasRunningStep = Object.values(steps).includes('running')
+  if (episode.status === 'running' && !hasRunningStep) {
+    episode.status = steps.mux === 'completed' ? 'completed' : 'failed'
+    episode.error ||= '流水线被中断，请从未完成步骤重跑。'
+  }
+
   const legacyFallbackDetected =
     !episode.codeFallback
     && episode.steps?.code === 'completed'

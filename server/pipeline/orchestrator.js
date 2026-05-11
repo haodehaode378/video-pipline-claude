@@ -9,13 +9,15 @@ import { runStep5 } from './step5-narration.js'
 import { runStep6 } from './step6-tts.js'
 import { runTimelineStep } from './step-timeline.js'
 import { runStep7 } from './step7-mux.js'
+import { runAssetsStep } from './step-assets.js'
+import { runWhisperStep } from './step-whisper.js'
 
 let broadcast = null
 export function setBroadcaster(fn) { broadcast = fn }
 
 const DATA_PATH = 'data/episodes.json'
 
-const stepOrder = ['research', 'script', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'mux']
+const stepOrder = ['research', 'script', 'assets', 'narration', 'tts', 'timeline', 'code', 'snapshot', 'render', 'whisper', 'mux']
 
 function updateEpisode(slug, updater) {
   const episodes = readJSON(DATA_PATH) || []
@@ -105,6 +107,23 @@ export async function startPipeline(episode, startFrom, options = {}) {
       ep.scriptContent = r.content
       if (r.storyboardContent) ep.storyboardContent = r.storyboardContent
       if (stopIdx === getStepIndex('script')) ep.status = 'storyboard_ready'
+    })
+  }
+
+  if (shouldRun('assets', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.assets = 'running' })
+    const r = await runAssetsStep(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.assets = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.assets = 'completed'
+      if (r.assets) ep.assetsContent = r.assets
     })
   }
 
@@ -210,6 +229,23 @@ export async function startPipeline(episode, startFrom, options = {}) {
       })
       return
     }
+  }
+
+  if (shouldRun('whisper', startIdx, stopIdx)) {
+    updateEpisode(slug, (ep) => { ep.steps.whisper = 'running' })
+    const r = await runWhisperStep(episode)
+    if (!r.success) {
+      updateEpisode(slug, (ep) => {
+        ep.steps.whisper = 'failed'
+        ep.status = 'failed'
+        ep.error = r.error
+      })
+      return
+    }
+    updateEpisode(slug, (ep) => {
+      ep.steps.whisper = 'completed'
+      if (r.subtitles) ep.subtitlesContent = r.subtitles
+    })
   }
 
   if (shouldRun('mux', startIdx, stopIdx)) {

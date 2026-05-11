@@ -15,5 +15,29 @@
   "tts": {
     "voice": "general",
     "speed": 1.0
+  },
+  "renderEngine": "puppeteer",
+  "effects": {
+    "fadeIn": false,
+    "fadeOut": false,
+    "crossDissolve": false,
+    "pictureInPicture": false,
+    "kenBurns": false,
+    "speedCurve": false,
+    "subtitleBurn": false,
+    "bgmMix": false
+  },
+  "whisper": {
+    "mode": "api",
+    "language": "zh",
+    "generateSrt": true,
+    "generateAss": true
+  },
+  "bgm": {
+    "path": "",
+    "volume": 0.15
+  },
+  "d3": {
+    "colorPalette": ["#e94560", "#0f3460", "#16213e", "#533483", "#e1e1e1"]
   }
 }

@@ -65,7 +65,6 @@ export async function getAudioDuration(filePath) {
     '-f', 'null',
     '-',
   ])
-  // Parse duration from stderr (ffmpeg outputs info to stderr)
   const match = output.match(/Duration: (\d+):(\d+):(\d+)\.(\d+)/)
   if (match) {
     return (
@@ -76,4 +75,99 @@ export async function getAudioDuration(filePath) {
     )
   }
   return 0
+}
+
+export async function applyVideoFilters(videoPath, filterComplex, outputPath) {
+  await run([
+    '-y',
+    '-i', videoPath,
+    '-vf', filterComplex,
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-preset', 'fast',
+    '-crf', '23',
+    '-c:a', 'copy',
+    outputPath,
+  ])
+  return outputPath
+}
+
+export async function mixAudioTracks(mainAudioPath, bgmPath, outputPath, bgmVolume = 0.15) {
+  await run([
+    '-y',
+    '-i', mainAudioPath,
+    '-i', bgmPath,
+    '-filter_complex', `[1:a]volume=${bgmVolume}[bgmv];[0:a][bgmv]amix=inputs=2:duration=first`,
+    '-c:a', 'aac',
+    outputPath,
+  ])
+  return outputPath
+}
+
+export async function burnSubtitles(videoPath, subtitlePath, outputPath) {
+  const escaped = subtitlePath.replace(/\\/g, '/').replace(/:/g, '\\:')
+  await run([
+    '-y',
+    '-i', videoPath,
+    '-vf', `subtitles='${escaped}':force_style='FontSize=24,PrimaryColour=&H00FFFFFF,Outline=1,Shadow=1'`,
+    '-c:a', 'copy',
+    outputPath,
+  ])
+  return outputPath
+}
+
+export async function applySpeedCurve(inputPath, outputPath, speedFactor = 1.2) {
+  const setpts = `${(1 / speedFactor).toFixed(3)}*PTS`
+  const atempo = speedFactor.toFixed(3)
+  await run([
+    '-y',
+    '-i', inputPath,
+    '-filter_complex', `[0:v]setpts=${setpts}[v];[0:a]atempo=${atempo}[a]`,
+    '-map', '[v]',
+    '-map', '[a]',
+    '-c:v', 'libx264',
+    '-pix_fmt', 'yuv420p',
+    '-preset', 'fast',
+    '-crf', '23',
+    outputPath,
+  ])
+  return outputPath
+}
+
+export async function muxWithEffects(videoPath, audioPath, outputPath, options = {}) {
+  const { bgmPath, bgmVolume = 0.15, subtitlePath, videoFilters, totalDuration } = options
+  const inputs = ['-i', videoPath, '-i', audioPath]
+  const filterParts = []
+  const outputs = []
+
+  if (bgmPath && fs.existsSync(bgmPath)) {
+    inputs.push('-i', bgmPath)
+    filterParts.push(`[1:a]volume=${bgmVolume}[bgmv];[1:a][bgmv]amix=inputs=2:duration=first[fa]`)
+  }
+
+  if (videoFilters) {
+    filterParts.push(`[0:v]${videoFilters}[fv]`)
+  }
+
+  const filterComplex = filterParts.join(';')
+
+  const args = ['-y', ...inputs]
+  if (filterComplex) {
+    args.push('-filter_complex', filterComplex)
+    if (videoFilters) outputs.push('-map', '[fv]')
+    else outputs.push('-map', '0:v')
+    if (bgmPath && fs.existsSync(bgmPath)) outputs.push('-map', '[fa]')
+    else outputs.push('-map', '1:a')
+  } else {
+    outputs.push('-map', '0:v', '-map', '1:a')
+  }
+
+  args.push(...outputs, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-crf', '23', '-c:a', 'aac', '-shortest', outputPath)
+
+  if (subtitlePath && fs.existsSync(subtitlePath)) {
+    return burnSubtitles(outputPath, subtitlePath, outputPath.replace('.mp4', '-subbed.mp4'))
+  }
+
+  await run(args)
+  return outputPath
 }

@@ -3,6 +3,8 @@ import { buildScriptPrompt } from '../ai/prompts.js'
 import { writeText, getScriptDir, readText } from '../utils/file-helper.js'
 import { info } from '../utils/logger.js'
 
+const STORYBOARD_MAX_TOKENS = parseInt(process.env.STORYBOARD_MAX_TOKENS || '8000', 10)
+
 function stripJsonFence(text = '') {
   return text
     .trim()
@@ -88,7 +90,10 @@ export async function runStep1(episode) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     info(`[Step1] Generating storyboard attempt ${attempt}/3 for "${episode.title}" (${episode.slug})...`)
     const prompt = retryNote ? `${user}\n\nRegeneration requirements:\n${retryNote}` : user
-    const result = await sendMessage(system, prompt, { maxTokens: 4000 })
+    const result = await sendMessage(system, prompt, {
+      maxTokens: STORYBOARD_MAX_TOKENS + (attempt - 1) * 2000,
+      temperature: 0.4,
+    })
     if (result.error) {
       lastError = result.error
       writeDebugArtifact(scriptDir, 'storyboard', attempt, 'error', result.error)

@@ -4,6 +4,12 @@ import { writeText, getEpisodeDir, readText } from '../utils/file-helper.js'
 import styleCheck from '../utils/style-check.js'
 import { generateLocalCodeBundle } from '../utils/local-codegen.js'
 import { info, warn } from '../utils/logger.js'
+import { generateSceneComponent, classifySceneType } from '../render/scene-components.js'
+import { bootstrapRemotionProject } from '../render/remotion-bundle.js'
+import path from 'node:path'
+import fs from 'node:fs'
+
+const RENDER_ENGINE = process.env.RENDER_ENGINE || 'remotion'
 
 const CODE_PLAN_RESPONSE_FORMAT = {
   type: 'json_schema',
@@ -829,6 +835,45 @@ function fallbackResult(episode, storyboard, timeline, dir, reason) {
   }
 }
 
+async function runRemotionCodeGen(episode, storyboardData, timelineData, dir) {
+  info(`[Step2:Remotion] Generating React components for "${episode.title}" (${episode.slug})`)
+
+  try {
+    const scenes = Array.isArray(timelineData?.scenes) ? timelineData.scenes : []
+    const storyboardScenes = Array.isArray(storyboardData?.scenes) ? storyboardData.scenes : []
+
+    if (scenes.length === 0) {
+      return { success: false, error: 'Timeline has no scenes' }
+    }
+
+    const components = scenes.map((scene, index) => {
+      const storyScene = storyboardScenes.find((s) => s.id === scene.id) || storyboardScenes[index] || {}
+      const merged = { ...storyScene, ...scene, duration: scene.duration || storyScene.duration || 5 }
+      return generateSceneComponent(merged, index)
+    })
+
+    const remotionDir = path.join(dir, 'remotion')
+    await bootstrapRemotionProject(episode.slug, components, remotionDir)
+
+    const componentsJson = JSON.stringify(components, null, 2)
+    writeText(`${dir}/remotion-components.json`, componentsJson)
+    for (const legacyFile of ['index.html', 'style.css', 'script.js', 'code-plan.json']) {
+      const legacyPath = path.join(dir, legacyFile)
+      if (fs.existsSync(legacyPath)) fs.unlinkSync(legacyPath)
+    }
+
+    info(`[Step2:Remotion] Generated ${components.length} scene components for "${episode.title}"`)
+    return {
+      success: true,
+      output: { remotionDir, components: path.join(dir, 'remotion-components.json') },
+      codeContent: { remotionComponents: components, type: 'remotion' },
+    }
+  } catch (err) {
+    warn(`[Step2:Remotion] Failed: ${err.message} — falling back to Puppeteer`)
+    return { success: false, error: `Remotion code gen failed: ${err.message}` }
+  }
+}
+
 export async function runStep2(episode) {
   const startedAt = Date.now()
   info(`[Step2] Generating code for "${episode.title}" (${episode.slug})...`)
@@ -855,6 +900,10 @@ export async function runStep2(episode) {
   const slug = episode.slug
   const storyboard = JSON.stringify(storyboardData, null, 2)
   const timeline = JSON.stringify(timelineData, null, 2)
+
+  if (RENDER_ENGINE === 'remotion') {
+    return runRemotionCodeGen(episode, storyboardData, timelineData, dir)
+  }
 
   info(`[Step2] Generating code plan for "${episode.title}" (${episode.slug})...`)
   const planResult = await generateValidatedPart('plan', storyboard, slug, episode.template, research, timeline, '', 10000, 'code plan')

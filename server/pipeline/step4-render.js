@@ -4,14 +4,21 @@ import fs from 'node:fs'
 import { getEpisodeDir } from '../utils/file-helper.js'
 import { imagesToVideo } from '../media/ffmpeg.js'
 import { inspectRenderQuality } from '../utils/render-quality.js'
+import { info, warn } from '../utils/logger.js'
 
+const RENDER_ENGINE = process.env.RENDER_ENGINE || 'remotion'
 const MIN_EFFECTIVE_FPS = parseFloat(process.env.RENDER_MIN_EFFECTIVE_FPS || '8')
 const MAX_RENDER_FRAMES = parseInt(process.env.RENDER_MAX_FRAMES || '1200', 10)
 
 export async function runStep4(episode, fps = 30) {
-  console.log(`[Step4] Rendering video for "${episode.title}"...`)
+  const slug = episode.slug
+  info(`[Step4] Rendering video for "${episode.title}" (${slug})`)
 
-  const dir = getEpisodeDir(episode.slug)
+  const dir = getEpisodeDir(slug)
+
+  if (RENDER_ENGINE === 'remotion') {
+    return runRemotionRender(episode, dir, fps)
+  }
   const htmlPath = path.join(dir, 'index.html')
   const framesDir = path.join(dir, 'frames')
   const outputDir = path.join(dir, 'output')
@@ -91,11 +98,38 @@ export async function runStep4(episode, fps = 30) {
     }
     fs.rmdirSync(framesDir)
 
-    console.log(`[Step4] Video ready: ${outputPath}`)
+    info(`[Step4] Video ready: ${outputPath}`)
     return { success: true, output: outputPath }
   } catch (err) {
     return { success: false, error: err.message }
   } finally {
     if (browser) await browser.close()
+  }
+}
+
+async function runRemotionRender(episode, dir, fps = 30) {
+  info(`[Step4:Remotion] Rendering video for "${episode.title}"`)
+
+  try {
+    const remotionDir = path.join(dir, 'remotion')
+    const outputDir = path.join(dir, 'output')
+    const outputPath = path.join(outputDir, `episode-${episode.slug}.mp4`)
+
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true })
+
+    if (!fs.existsSync(path.join(remotionDir, 'entry.jsx'))) {
+      return { success: false, error: 'Remotion project not found. Run Step 2 first.' }
+    }
+
+    const { renderRemotionVideo } = await import('../render/remotion-bundle.js')
+    await renderRemotionVideo(remotionDir, outputPath, fps)
+
+    info(`[Step4:Remotion] Video ready: ${outputPath}`)
+    return { success: true, output: outputPath }
+  } catch (err) {
+    if (err.code === 'ERR_MODULE_NOT_FOUND') {
+      return { success: false, error: '@remotion packages not installed. Install: npm i @remotion/renderer @remotion/bundler' }
+    }
+    return { success: false, error: err.message }
   }
 }

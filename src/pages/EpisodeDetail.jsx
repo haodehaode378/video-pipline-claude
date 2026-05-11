@@ -33,6 +33,11 @@ function computeCurrentStep(episode) {
   for (let i = 0; i < stepOrder.length; i++) {
     if (steps[stepOrder[i]] === 'running') return i + 1
   }
+  if (episode.status === 'failed') {
+    for (let i = 0; i < stepOrder.length; i++) {
+      if (steps[stepOrder[i]] === 'failed') return i + 1
+    }
+  }
   for (let i = 0; i < stepOrder.length; i++) {
     if (steps[stepOrder[i]] !== 'completed') return i + 1
   }
@@ -232,7 +237,13 @@ export default function EpisodeDetail() {
         {displayEpisode.template ? ` · 风格：${displayEpisode.template}` : ' · 使用全局风格'}
       </p>
 
-      <PipelineTimeline currentStep={currentStep} failed={displayEpisode.status === 'failed'} />
+      <PipelineTimeline
+        currentStep={currentStep}
+        failed={displayEpisode.status === 'failed'}
+        stepStatuses={displayEpisode.steps || {}}
+        onRestartStep={retryFromStep}
+        restartDisabled={actionLoading || displayEpisode.status === 'running'}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
         <div className="lg:col-span-2 space-y-4">

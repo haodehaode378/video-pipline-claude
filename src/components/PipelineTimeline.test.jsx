@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
 import PipelineTimeline from './PipelineTimeline'
 
 const labels = [
@@ -49,5 +49,17 @@ describe('PipelineTimeline', () => {
     const { container } = render(<PipelineTimeline currentStep={1} />)
     // There should be w-4 h-px connector elements
     expect(container.querySelectorAll('.h-px').length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('shows restart actions for every step', () => {
+    render(<PipelineTimeline currentStep={1} onRestartStep={() => {}} />)
+    expect(screen.getAllByText('重跑')).toHaveLength(labels.length)
+  })
+
+  it('restarts from the selected step', () => {
+    const onRestartStep = vi.fn()
+    render(<PipelineTimeline currentStep={1} onRestartStep={onRestartStep} />)
+    fireEvent.click(screen.getAllByText('重跑')[2])
+    expect(onRestartStep).toHaveBeenCalledWith('assets')
   })
 })
