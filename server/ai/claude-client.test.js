@@ -4,7 +4,10 @@ const originalEnv = { ...process.env }
 
 afterEach(() => {
   vi.restoreAllMocks()
-  process.env = { ...originalEnv }
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) delete process.env[key]
+  }
+  Object.assign(process.env, originalEnv)
 })
 
 describe('sendMessage empty content diagnostics', () => {

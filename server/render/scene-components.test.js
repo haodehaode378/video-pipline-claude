@@ -120,6 +120,50 @@ describe('Remotion scene components', () => {
     expect(component.component).not.toContain('soda-can')
   })
 
+  it('renders bluetooth headphone visual plan with real electronics objects', () => {
+    const scene = {
+      id: 'scene-01',
+      title: '蓝牙耳机品牌竞争',
+      visual: '耳机、声波和芯片组成主体视觉',
+      narration: '音频体验和芯片能力共同决定竞争力。',
+      visualPlan: {
+        sceneType: 'openingHook',
+        heroObjects: [
+          { type: 'headphones', label: '耳机' },
+          { type: 'audioWaves', label: '声波' },
+          { type: 'chip', label: '芯片' },
+        ],
+      },
+    }
+
+    const component = generateSceneComponent(scene, 0)
+    expect(component.component).toContain('topic-object headphones')
+    expect(component.component).toContain('topic-object audio-waves')
+    expect(component.component).not.toContain('soda-can')
+  })
+
+  it('renders comparison objects as graphics instead of object-name text', () => {
+    const scene = {
+      id: 'scene-02',
+      title: '两种耳机路线对比',
+      visual: '左右分屏对比降噪和音质路线',
+      narration: '不同路线的竞争重点不同。',
+      visualPlan: {
+        sceneType: 'comparison',
+        heroObjects: [
+          { type: 'headphones', label: '耳机' },
+          { type: 'chip', label: '芯片' },
+        ],
+      },
+    }
+
+    const component = generateSceneComponent(scene, 1)
+    expect(component.component).toContain('split-compare')
+    expect(component.component).toContain('topic-object headphones')
+    expect(component.component).toContain('topic-object chip')
+    expect(component.component).not.toContain('{side.objectType}')
+  })
+
   it('classifies closed-loop chain scenes as process flow before experiment', () => {
     const scene = {
       id: 'scene-02',

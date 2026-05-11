@@ -300,6 +300,30 @@ window.__hfSeek = function() {};
     expect(scene.heroObjects.map((item) => item.type)).not.toContain('sodaCan')
   })
 
+  it('does not classify generic brand wording as beverage for bluetooth headphone topics', () => {
+    const plan = buildLocalVisualPlan(
+      { title: '蓝牙耳机品牌为什么越来越卷', keywords: '蓝牙耳机, 降噪, 音频, 品牌' },
+      {
+        scenes: [
+          {
+            id: 'scene-01',
+            title: '耳机品牌竞争开场',
+            visual: '左右耳机、声波和芯片信号入场',
+          },
+        ],
+      },
+      {
+        scenes: [{ id: 'scene-01', start: 0, duration: 6 }],
+      },
+    )
+
+    const scene = plan.scenes[0]
+    expect(scene.visualDomain).toBe('consumer_electronics')
+    expect(scene.heroObjects.map((item) => item.type)).toEqual(['headphones', 'audioWaves', 'chip'])
+    expect(scene.avoidObjects).toContain('sodaCan')
+    expect(scene.heroObjects.map((item) => item.type)).not.toContain('drinkCup')
+  })
+
   it('validates API visual plans and clamps unknown visual objects', () => {
     const expectedScenes = [{ id: 'scene-01' }]
     const valid = validateVisualPlan(

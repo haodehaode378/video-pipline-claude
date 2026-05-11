@@ -65,6 +65,15 @@ wss.on('connection', (ws) => {
       }
     }
   })
+
+  ws.on('error', () => {
+    if (subscribedSlug && subscribers.has(subscribedSlug)) {
+      subscribers.get(subscribedSlug).delete(ws)
+      if (subscribers.get(subscribedSlug).size === 0) {
+        subscribers.delete(subscribedSlug)
+      }
+    }
+  })
 })
 
 // Export for orchestrator to call
@@ -73,8 +82,17 @@ export function broadcastEpisodeUpdate(slug, episode) {
   if (!clients) return
   const data = JSON.stringify({ type: 'update', slug, episode })
   for (const ws of clients) {
-    if (ws.readyState === 1) ws.send(data)
+    if (ws.readyState !== 1) {
+      clients.delete(ws)
+      continue
+    }
+    try {
+      ws.send(data)
+    } catch {
+      clients.delete(ws)
+    }
   }
+  if (clients.size === 0) subscribers.delete(slug)
 }
 
 setBroadcaster(broadcastEpisodeUpdate)

@@ -39,6 +39,8 @@ const ALLOWED_VISUAL_OBJECTS = [
   'chartRadar',
   'chip',
   'networkGraph',
+  'headphones',
+  'audioWaves',
   'genericBadge',
 ]
 
@@ -829,7 +831,8 @@ function normalizeVisualObject(item) {
 }
 
 function localVisualDomain(text) {
-  if (/(可乐|饮料|汽水|百事|可口|品牌)/i.test(text)) return 'beverage_brand'
+  if (/(可乐|饮料|汽水|百事|可口可乐|碳酸|奶茶|咖啡|啤酒|果汁)/i.test(text)) return 'beverage_brand'
+  if (/(蓝牙|耳机|耳塞|音频|降噪|声学|无线|手机|穿戴|消费电子|数码|充电盒)/i.test(text)) return 'consumer_electronics'
   if (/(大学|学校|校园|学院|武科大|教育|学生|校徽)/i.test(text)) return 'university'
   if (/(钢铁|冶金|高炉|钢水|耐火砖|材料|晶体|纳米)/i.test(text)) return 'steel_materials'
   if (/(算法|代码|芯片|网络|数据|ai|人工智能)/i.test(text)) return 'technology'
@@ -838,6 +841,7 @@ function localVisualDomain(text) {
 
 function localHeroObjects(domain, text) {
   if (domain === 'beverage_brand') return ['sodaCan', 'drinkCup']
+  if (domain === 'consumer_electronics') return ['headphones', 'audioWaves', 'chip']
   if (domain === 'university' && /(钢铁|冶金|高炉|材料|耐火砖)/i.test(text)) return ['schoolGate', 'blastFurnace', 'book']
   if (domain === 'university') return ['schoolGate', 'book', 'graduationCap']
   if (domain === 'steel_materials') return ['blastFurnace', 'crystalLattice', 'gearLoop']
@@ -950,7 +954,9 @@ Rules:
 - Use the exact scene ids from Timeline.
 - For universities/schools, prefer schoolGate, book, graduationCap, labFlask.
 - For steel/metallurgy/materials, prefer blastFurnace, crystalLattice, gearLoop.
-- For beverages/cola/brand taste, prefer sodaCan, drinkCup.
+- For bluetooth/headphones/audio/consumer electronics, prefer headphones, audioWaves, chip, networkGraph.
+- For beverages/cola/soft drinks only, prefer sodaCan, drinkCup.
+- Never treat the generic word "brand" as beverage-related by itself.
 - Put sodaCan/drinkCup in avoidObjects unless the topic is beverage related.`
 
   const result = await sendMessage(system, user, { maxTokens: 5000, temperature: 0.2 })

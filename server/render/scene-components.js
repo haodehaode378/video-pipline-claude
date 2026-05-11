@@ -112,6 +112,31 @@ function gearLoop(color, delay) {
           </div>`
 }
 
+function headphonesObject(color, delay) {
+  return `          <div className="topic-object headphones" style={{ width: 280, height: 260, position: 'relative', transform: 'translateY(' + (28 - Math.max(0, enter - ${delay}) * 46) + 'px)', opacity: Math.min(1, Math.max(0, enter - ${delay}) * 2.4) }}>
+            <div style={{ position: 'absolute', left: 52, top: 22, width: 176, height: 156, borderRadius: '120px 120px 40px 40px', border: '18px solid ' + ${color}, borderBottom: 0, boxShadow: '0 0 40px rgba(96,165,250,0.34)' }} />
+            <div style={{ position: 'absolute', left: 28, bottom: 24, width: 74, height: 116, borderRadius: 30, background: 'linear-gradient(160deg, rgba(255,255,255,0.96), ' + ${color} + ')', boxShadow: '0 26px 48px rgba(0,0,0,0.30)' }} />
+            <div style={{ position: 'absolute', right: 28, bottom: 24, width: 74, height: 116, borderRadius: 30, background: 'linear-gradient(200deg, rgba(255,255,255,0.96), ' + ${color} + ')', boxShadow: '0 26px 48px rgba(0,0,0,0.30)' }} />
+            <div style={{ position: 'absolute', left: 118, top: 172, width: 44, height: 44, borderRadius: 999, background: '#f8fafc', boxShadow: '0 0 26px rgba(255,255,255,0.38)' }} />
+          </div>`
+}
+
+function audioWavesObject(color, delay) {
+  return `          <div className="topic-object audio-waves" style={{ width: 270, height: 230, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, transform: 'scale(' + (0.82 + Math.max(0, enter - ${delay}) * 0.18) + ')', opacity: Math.min(1, Math.max(0, enter - ${delay}) * 2.4) }}>
+            {[0,1,2,3,4,5,6].map((i) => (
+              <div key={i} style={{ width: 18, height: 42 + Math.abs(3 - i) * 28 + pulse * 38, borderRadius: 999, background: i % 2 ? ${color} : '#f8fafc', boxShadow: '0 0 30px rgba(96,165,250,0.32)' }} />
+            ))}
+          </div>`
+}
+
+function chipObject(color, delay) {
+  return `          <div className="topic-object chip" style={{ width: 240, height: 240, position: 'relative', borderRadius: 26, background: 'linear-gradient(135deg, rgba(255,255,255,0.18), ' + ${color} + ', rgba(15,23,42,0.82))', border: '2px solid rgba(255,255,255,0.28)', boxShadow: '0 28px 58px rgba(0,0,0,0.34)', transform: 'rotate(' + (-8 + enter * 8) + 'deg) scale(' + (0.84 + Math.max(0, enter - ${delay}) * 0.16) + ')', opacity: Math.min(1, Math.max(0, enter - ${delay}) * 2.4) }}>
+            {[0,1,2,3,4].map((i) => <div key={'h' + i} style={{ position: 'absolute', left: -18, top: 34 + i * 34, width: 18, height: 7, borderRadius: 999, background: '#94a3b8' }} />)}
+            {[0,1,2,3,4].map((i) => <div key={'r' + i} style={{ position: 'absolute', right: -18, top: 34 + i * 34, width: 18, height: 7, borderRadius: 999, background: '#94a3b8' }} />)}
+            <div style={{ position: 'absolute', inset: 54, borderRadius: 18, border: '2px solid rgba(255,255,255,0.34)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 28, fontWeight: 900 }}>BT</div>
+          </div>`
+}
+
 function topicObject(type, color = "'#2563eb'", delay = 0) {
   switch (type) {
     case 'schoolGate': return schoolGate(color, delay)
@@ -119,6 +144,9 @@ function topicObject(type, color = "'#2563eb'", delay = 0) {
     case 'book': return bookObject(color, delay)
     case 'crystalLattice': return crystalLattice(color, delay)
     case 'gearLoop': return gearLoop(color, delay)
+    case 'headphones': return headphonesObject(color, delay)
+    case 'audioWaves': return audioWavesObject(color, delay)
+    case 'chip': return chipObject(color, delay)
     case 'sodaCan': return sodaCan('badge', '#2563eb', delay)
     case 'drinkCup': return sodaCan('letter', '#ef4444', delay)
     default: return symbolBadge()
@@ -131,6 +159,25 @@ function sceneObjectTypes(scene) {
     return planned.map((item) => typeof item === 'string' ? item : item?.type).filter(Boolean)
   }
   return []
+}
+
+function comparisonCard(label, color, score, objectType, offset) {
+  return `            <div style={{ position: 'relative', overflow: 'hidden', borderRadius: 28, border: '1px solid rgba(255,255,255,0.15)', background: 'linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))', padding: 34, transform: 'translateY(' + (${offset} - enter * ${offset}) + 'px)', opacity: enter }}>
+              <div style={{ position: 'absolute', inset: 'auto -60px -100px auto', width: 260, height: 260, borderRadius: 999, background: '${color}', opacity: 0.24 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: '#fff', fontSize: 48, fontWeight: 900 }}>${label}</div>
+                <div className="symbol-badge" style={{ width: 74, height: 74, borderRadius: 999, background: '${color}', boxShadow: '0 0 30px ${color}' }} />
+              </div>
+              <div style={{ height: 330, display: 'grid', placeItems: 'center' }}>
+${topicObject(objectType, `'${color}'`, 0)}
+              </div>
+              <div className="metric-bars" style={{ display: 'grid', gap: 14 }}>
+                <div style={{ height: 14, borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+                  <div style={{ width: ${score} + '%', height: '100%', background: '${color}', borderRadius: 999 }} />
+                </div>
+                <div style={{ color: '#cbd5e1', fontSize: 24 }}>{${score}}% 信号强度</div>
+              </div>
+            </div>`
 }
 
 function sodaCan(label, color, delay) {
@@ -192,31 +239,8 @@ ${bubbleField()}
       <div style={{ display: 'grid', gridTemplateColumns: '470px 1fr', gap: 54, height: '100%', alignItems: 'center' }}>
 ${textBlock('COMPARISON')}
         <div className="split-compare" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 28, height: 720 }}>
-          {[
-            { label: 'A', color: '#2563eb', score: leftScore, objectType: '${leftObject}' },
-            { label: 'B', color: '#ef4444', score: rightScore, objectType: '${rightObject}' },
-          ].map((side, i) => (
-            <div key={side.label} style={{ position: 'relative', overflow: 'hidden', borderRadius: 28, border: '1px solid rgba(255,255,255,0.15)', background: 'linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))', padding: 34, transform: 'translateY(' + (i ? 26 - enter * 26 : -26 + enter * 26) + 'px)', opacity: enter }}>
-              <div style={{ position: 'absolute', inset: 'auto -60px -100px auto', width: 260, height: 260, borderRadius: 999, background: side.color, opacity: 0.24 }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ color: '#fff', fontSize: 48, fontWeight: 900 }}>{side.label}</div>
-                <div className="symbol-badge" style={{ width: 74, height: 74, borderRadius: 999, background: side.color, boxShadow: '0 0 30px ' + side.color }} />
-              </div>
-              <div style={{ height: 330, display: 'grid', placeItems: 'center' }}>
-                {side.objectType === 'sodaCan' ? (
-                  <div className="soda-can" style={{ width: 160, height: 300, borderRadius: 26, background: 'linear-gradient(90deg, rgba(255,255,255,0.22), ' + side.color + ', rgba(0,0,0,0.28))', boxShadow: '0 30px 50px rgba(0,0,0,0.32)' }} />
-                ) : (
-                  <div className={'topic-object ' + side.objectType} style={{ width: 190, height: 190, borderRadius: side.objectType === 'schoolGate' ? 18 : 999, background: side.color, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 28, fontWeight: 900, boxShadow: '0 30px 50px rgba(0,0,0,0.32)' }}>{side.objectType}</div>
-                )}
-              </div>
-              <div className="metric-bars" style={{ display: 'grid', gap: 14 }}>
-                <div style={{ height: 14, borderRadius: 999, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
-                  <div style={{ width: side.score + '%', height: '100%', background: side.color, borderRadius: 999 }} />
-                </div>
-                <div style={{ color: '#cbd5e1', fontSize: 24 }}>{side.score}% 信号强度</div>
-              </div>
-            </div>
-          ))}
+${comparisonCard('A', '#2563eb', 'leftScore', leftObject, -26)}
+${comparisonCard('B', '#ef4444', 'rightScore', rightObject, 26)}
         </div>
       </div>
     </AbsoluteFill>
